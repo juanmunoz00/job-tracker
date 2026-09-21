@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="12.0.1" />
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
     <PackageReference Include="FluentAssertions" Version="8.11.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.0" />
@@ -26,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\JobTracker.Core\JobTracker.Core.csproj" />
     <ProjectReference Include="..\JobTracker.Infrastructure\JobTracker.Infrastructure.csproj" />
+    <ProjectReference Include="..\JobTracker.Api\JobTracker.Api.csproj" />
   </ItemGroup>
 
 </Project>

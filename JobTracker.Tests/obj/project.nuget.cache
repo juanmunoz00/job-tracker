@@ -1,13 +1,16 @@
 {
   "version": 2,
-  "dgSpecHash": "iT3fXI81YSk=",
+  "dgSpecHash": "T+0boRe8Km4=",
   "success": true,
   "projectFilePath": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Tests/JobTracker.Tests.csproj",
   "expectedPackageFiles": [
+    "/Users/juancho/.nuget/packages/automapper/12.0.1/automapper.12.0.1.nupkg.sha512",
+    "/Users/juancho/.nuget/packages/automapper.extensions.microsoft.dependencyinjection/12.0.1/automapper.extensions.microsoft.dependencyinjection.12.0.1.nupkg.sha512",
     "/Users/juancho/.nuget/packages/castle.core/5.1.1/castle.core.5.1.1.nupkg.sha512",
     "/Users/juancho/.nuget/packages/coverlet.collector/6.0.0/coverlet.collector.6.0.0.nupkg.sha512",
     "/Users/juancho/.nuget/packages/fluentassertions/8.11.0/fluentassertions.8.11.0.nupkg.sha512",
     "/Users/juancho/.nuget/packages/microsoft.codecoverage/17.8.0/microsoft.codecoverage.17.8.0.nupkg.sha512",
+    "/Users/juancho/.nuget/packages/microsoft.csharp/4.7.0/microsoft.csharp.4.7.0.nupkg.sha512",
     "/Users/juancho/.nuget/packages/microsoft.entityframeworkcore/8.0.0/microsoft.entityframeworkcore.8.0.0.nupkg.sha512",
     "/Users/juancho/.nuget/packages/microsoft.entityframeworkcore.abstractions/8.0.0/microsoft.entityframeworkcore.abstractions.8.0.0.nupkg.sha512",
     "/Users/juancho/.nuget/packages/microsoft.entityframeworkcore.analyzers/8.0.0/microsoft.entityframeworkcore.analyzers.8.0.0.nupkg.sha512",
