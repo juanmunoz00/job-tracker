@@ -1,0 +1,16 @@
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/bin/Debug/net8.0/JobTracker.Infrastructure.deps.json
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/bin/Debug/net8.0/JobTracker.Infrastructure.dll
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/bin/Debug/net8.0/JobTracker.Infrastructure.pdb
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/bin/Debug/net8.0/JobTracker.Core.dll
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/bin/Debug/net8.0/JobTracker.Core.pdb
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/obj/Debug/net8.0/JobTracker.Infrastructure.csproj.AssemblyReference.cache
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/obj/Debug/net8.0/JobTracker.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/obj/Debug/net8.0/JobTracker.Infrastructure.AssemblyInfoInputs.cache
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/obj/Debug/net8.0/JobTracker.Infrastructure.AssemblyInfo.cs
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/obj/Debug/net8.0/JobTracker.Infrastructure.csproj.CoreCompileInputs.cache
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/obj/Debug/net8.0/JobTracker.Infrastructure.sourcelink.json
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/obj/Debug/net8.0/JobTrack.59461C01.Up2Date
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/obj/Debug/net8.0/JobTracker.Infrastructure.dll
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/obj/Debug/net8.0/refint/JobTracker.Infrastructure.dll
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/obj/Debug/net8.0/JobTracker.Infrastructure.pdb
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/obj/Debug/net8.0/ref/JobTracker.Infrastructure.dll

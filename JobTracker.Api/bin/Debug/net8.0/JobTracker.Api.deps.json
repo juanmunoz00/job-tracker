@@ -1,0 +1,56 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "JobTracker.Api/1.0.0": {
+        "dependencies": {
+          "JobTracker.Core": "1.0.0",
+          "JobTracker.Infrastructure": "1.0.0"
+        },
+        "runtime": {
+          "JobTracker.Api.dll": {}
+        }
+      },
+      "JobTracker.Core/1.0.0": {
+        "runtime": {
+          "JobTracker.Core.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "JobTracker.Infrastructure/1.0.0": {
+        "dependencies": {
+          "JobTracker.Core": "1.0.0"
+        },
+        "runtime": {
+          "JobTracker.Infrastructure.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "JobTracker.Api/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "JobTracker.Core/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "JobTracker.Infrastructure/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

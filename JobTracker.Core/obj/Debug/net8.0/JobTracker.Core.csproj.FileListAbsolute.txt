@@ -1,0 +1,12 @@
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/bin/Debug/net8.0/JobTracker.Core.deps.json
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/bin/Debug/net8.0/JobTracker.Core.dll
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/bin/Debug/net8.0/JobTracker.Core.pdb
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/obj/Debug/net8.0/JobTracker.Core.GeneratedMSBuildEditorConfig.editorconfig
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/obj/Debug/net8.0/JobTracker.Core.AssemblyInfoInputs.cache
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/obj/Debug/net8.0/JobTracker.Core.AssemblyInfo.cs
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/obj/Debug/net8.0/JobTracker.Core.csproj.CoreCompileInputs.cache
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/obj/Debug/net8.0/JobTracker.Core.sourcelink.json
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/obj/Debug/net8.0/JobTracker.Core.dll
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/obj/Debug/net8.0/refint/JobTracker.Core.dll
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/obj/Debug/net8.0/JobTracker.Core.pdb
+/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/obj/Debug/net8.0/ref/JobTracker.Core.dll

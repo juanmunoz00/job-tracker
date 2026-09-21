@@ -1,0 +1,199 @@
+{
+  "format": 1,
+  "restore": {
+    "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Api/JobTracker.Api.csproj": {}
+  },
+  "projects": {
+    "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Api/JobTracker.Api.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Api/JobTracker.Api.csproj",
+        "projectName": "JobTracker.Api",
+        "projectPath": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Api/JobTracker.Api.csproj",
+        "packagesPath": "/Users/juancho/.nuget/packages/",
+        "outputPath": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Api/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/Users/juancho/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "/usr/local/share/dotnet/library-packs": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/JobTracker.Core.csproj": {
+                "projectPath": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/JobTracker.Core.csproj"
+              },
+              "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/JobTracker.Infrastructure.csproj": {
+                "projectPath": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/JobTracker.Infrastructure.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.AspNetCore.App": {
+              "privateAssets": "none"
+            },
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.404/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/JobTracker.Core.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/JobTracker.Core.csproj",
+        "projectName": "JobTracker.Core",
+        "projectPath": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/JobTracker.Core.csproj",
+        "packagesPath": "/Users/juancho/.nuget/packages/",
+        "outputPath": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/Users/juancho/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "/usr/local/share/dotnet/library-packs": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.404/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/JobTracker.Infrastructure.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/JobTracker.Infrastructure.csproj",
+        "projectName": "JobTracker.Infrastructure",
+        "projectPath": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/JobTracker.Infrastructure.csproj",
+        "packagesPath": "/Users/juancho/.nuget/packages/",
+        "outputPath": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Infrastructure/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/Users/juancho/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "/usr/local/share/dotnet/library-packs": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/JobTracker.Core.csproj": {
+                "projectPath": "/Users/juancho/dev1/portafolio_2_0/job-tracker/JobTracker.Core/JobTracker.Core.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.404/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}
