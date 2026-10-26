@@ -1,6 +1,18 @@
 @JobTracker.Api_HostAddress = http://localhost:5296
 
-GET {{JobTracker.Api_HostAddress}}/weatherforecast/
+GET {{JobTracker.Api_HostAddress}}/api/applications
 Accept: application/json
+
+###
+
+POST {{JobTracker.Api_HostAddress}}/api/applications
+Content-Type: application/json
+
+{
+  "company": "Contoso",
+  "country": "USA",
+  "position": "Senior Software Engineer",
+  "appliedDate": "2026-10-20"
+}
 
 ###

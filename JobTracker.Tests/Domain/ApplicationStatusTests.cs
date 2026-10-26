@@ -32,7 +32,7 @@ public class ApplicationStatusTests
     public void ApplicationStatus_IntValues_ShouldBeStable(
         ApplicationStatus status, int expectedValue)
     {
-        // Stable int values matter — EF Core stores these in the DB
+        // Enum is persisted as int; reordering values would corrupt existing rows
         ((int)status).Should().Be(expectedValue);
     }
 }

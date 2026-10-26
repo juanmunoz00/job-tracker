@@ -4,7 +4,7 @@ using JobTracker.Api.Controllers;
 using JobTracker.Core.DTOs;
 using JobTracker.Core.Interfaces;
 using JobTracker.Core.Models;
-using JobTracker.Api.Mappings;  // was JobTracker.Core.Mappings
+using JobTracker.Api.Mappings;  
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 
