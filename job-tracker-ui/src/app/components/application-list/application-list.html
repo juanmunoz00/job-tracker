@@ -1,0 +1,36 @@
+<section class="list">
+  <h2>Applications</h2>
+
+  @if (loading()) {
+    <p class="muted">Loading applications…</p>
+  } @else if (error()) {
+    <p class="error">{{ error() }}</p>
+  } @else if (applications().length === 0) {
+    <p class="muted">No applications yet.</p>
+  } @else {
+    <table>
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>Position</th>
+          <th>Country</th>
+          <th>Applied</th>
+          <th>Status</th>
+          <th>Updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (app of applications(); track app.id) {
+          <tr>
+            <td>{{ app.company }}</td>
+            <td>{{ app.position }}</td>
+            <td>{{ app.country }}</td>
+            <td>{{ app.appliedDate | date: 'mediumDate' }}</td>
+            <td>{{ app.status }}</td>
+            <td>{{ app.statusDate | date: 'short' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>
