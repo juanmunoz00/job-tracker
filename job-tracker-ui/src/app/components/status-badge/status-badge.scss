@@ -1,0 +1,17 @@
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.badge--applied     { background: #eef2f8; color: #3d4a63; border-color: #d6deeb; }
+.badge--phonescreen { background: #e6f1fb; color: #0b5cad; border-color: #c4ddf5; }
+.badge--interview   { background: #ece8fb; color: #5b3cc4; border-color: #d6cdf5; }
+.badge--takehome    { background: #fdf3e1; color: #9a5b00; border-color: #f4dcae; }
+.badge--offer       { background: #e3f6ec; color: #11724a; border-color: #bce6cf; }
+.badge--rejected    { background: #fdecec; color: #b42318; border-color: #f6caca; }
+.badge--withdrawn   { background: #f1f1f1; color: #6b6b6b; border-color: #dcdcdc; } 

@@ -2,10 +2,10 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ApplicationService } from '../../services/application.service';
 import { Application } from '../../models/application';
-
+import { StatusBadge } from '../status-badge/status-badge';
 @Component({
   selector: 'app-application-list',
-  imports: [DatePipe],
+  imports: [DatePipe, StatusBadge],
   templateUrl: './application-list.html',
   styleUrl: './application-list.scss'
 })
