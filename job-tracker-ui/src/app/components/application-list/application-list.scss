@@ -69,9 +69,32 @@ select {
 .link {
   color: #1f5fbf;
   text-decoration: none;
+  font: inherit;
   font-size: 0.9rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
 }
 
 .link:hover {
   text-decoration: underline;
+}
+
+.link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.link--danger {
+  color: #b42318;
+}
+
+.row-actions > * + * {
+  margin-left: 0.75rem;
+}
+
+.confirm-text {
+  font-size: 0.9rem;
+  color: #3d4a63;
 }

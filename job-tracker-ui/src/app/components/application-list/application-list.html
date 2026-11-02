@@ -27,6 +27,9 @@
   } @else if (filteredApplications().length === 0) {
     <p class="muted">No applications with status "{{ filterLabel() }}".</p>
   } @else {
+    @if (deleteError()) {
+      <p class="error">{{ deleteError() }}</p>
+    }    
     <p class="muted count">
       Showing {{ filteredApplications().length }} of {{ applications().length }}
     </p>
@@ -53,7 +56,18 @@
             <td><app-status-badge [status]="app.status" /></td>
             <td>{{ app.statusDate | date: 'short' }}</td>
             <td class="row-actions">
-              <a [routerLink]="['/edit', app.id]" class="link">Edit</a>
+              @if (confirmingId() === app.id) {
+                <span class="confirm-text">Delete?</span>
+                <button type="button" class="link link--danger"
+                        (click)="confirmDelete(app.id)"
+                        [disabled]="deletingId() === app.id">
+                  {{ deletingId() === app.id ? 'Deleting…' : 'Yes' }}
+                </button>
+                <button type="button" class="link" (click)="cancelDelete()">No</button>
+              } @else {
+                <a [routerLink]="['/edit', app.id]" class="link">Edit</a>
+                <button type="button" class="link link--danger" (click)="askDelete(app.id)">Delete</button>
+              }
             </td>            
           </tr>
         }

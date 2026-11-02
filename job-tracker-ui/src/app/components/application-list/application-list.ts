@@ -1,10 +1,10 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ApplicationService } from '../../services/application.service';
 import { Application, ApplicationStatus, STATUSES, STATUS_LABELS } from '../../models/application';
 import { StatusBadge } from '../status-badge/status-badge';
-import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-application-list',
@@ -34,6 +34,10 @@ export class ApplicationList implements OnInit {
     return filter === 'All' ? 'All' : STATUS_LABELS[filter];
   });
 
+  protected readonly confirmingId = signal<number | null>(null);
+  protected readonly deletingId = signal<number | null>(null);
+  protected readonly deleteError = signal<string | null>(null);
+
   ngOnInit(): void {
     this.applicationService.getAll().subscribe({
       next: (apps) => {
@@ -43,6 +47,31 @@ export class ApplicationList implements OnInit {
       error: () => {
         this.error.set('Could not load applications. Please try again.');
         this.loading.set(false);
+      }
+    });
+  }
+
+  protected askDelete(id: number): void {
+    this.deleteError.set(null);
+    this.confirmingId.set(id);
+  }
+
+  protected cancelDelete(): void {
+    this.confirmingId.set(null);
+  }
+
+  protected confirmDelete(id: number): void {
+    this.deletingId.set(id);
+
+    this.applicationService.delete(id).subscribe({
+      next: () => {
+        this.applications.update(apps => apps.filter(app => app.id !== id));
+        this.confirmingId.set(null);
+        this.deletingId.set(null);
+      },
+      error: () => {
+        this.deleteError.set('Could not delete the application. Please try again.');
+        this.deletingId.set(null);
       }
     });
   }
