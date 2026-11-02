@@ -1,0 +1,51 @@
+.form-page {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #3d4a63;
+}
+
+input,
+select {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #c9d1de;
+  border-radius: 6px;
+  font: inherit;
+  background: #fff;
+}
+
+.muted { color: #5a6478; }
+
+input.ng-touched.ng-invalid {
+  border-color: #b42318;
+}
+
+.field-error,
+.error {
+  color: #b42318;
+  font-size: 0.8rem;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}

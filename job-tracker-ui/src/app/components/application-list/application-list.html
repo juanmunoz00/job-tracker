@@ -40,6 +40,7 @@
           <th>Applied</th>
           <th>Status</th>
           <th>Updated</th>
+           <th></th>
         </tr>
       </thead>
       <tbody>
@@ -51,6 +52,9 @@
             <td>{{ app.appliedDate | date: 'mediumDate' }}</td>
             <td><app-status-badge [status]="app.status" /></td>
             <td>{{ app.statusDate | date: 'short' }}</td>
+            <td class="row-actions">
+              <a [routerLink]="['/edit', app.id]" class="link">Edit</a>
+            </td>            
           </tr>
         }
       </tbody>

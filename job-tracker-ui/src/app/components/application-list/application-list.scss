@@ -60,3 +60,18 @@ select {
   align-items: center;
   gap: 1rem;
 }
+
+.row-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.link {
+  color: #1f5fbf;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
