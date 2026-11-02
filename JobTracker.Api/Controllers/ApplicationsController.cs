@@ -45,9 +45,15 @@ public class ApplicationsController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, ApplicationDto dto)
     {
-        var app = _mapper.Map<Application>(dto);
-        app.Id = id;
-        var updated = await _repo.UpdateAsync(app);
+        if (!Enum.TryParse<ApplicationStatus>(dto.Status, out _))
+            return BadRequest($"Invalid status: {dto.Status}");
+
+        var existing = await _repo.GetByIdAsync(id);
+        if (existing is null)
+            return NotFound();
+
+        _mapper.Map(dto, existing);
+        var updated = await _repo.UpdateAsync(existing);
         return Ok(_mapper.Map<ApplicationDto>(updated));
     }
 

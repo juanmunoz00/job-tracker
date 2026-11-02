@@ -14,5 +14,10 @@ public class ApplicationProfile : Profile
         CreateMap<CreateApplicationDto, Application>()
             .ForMember(dest => dest.Status, opt => opt.MapFrom(_ => ApplicationStatus.Applied))
             .ForMember(dest => dest.StatusDate, opt => opt.MapFrom(_ => DateTime.UtcNow));
+
+        CreateMap<ApplicationDto, Application>()
+            .ForMember(dest => dest.Id, opt => opt.Ignore())
+            .ForMember(dest => dest.Status, opt => opt.MapFrom(src => Enum.Parse<ApplicationStatus>(src.Status)))
+            .ForMember(dest => dest.StatusDate, opt => opt.MapFrom(src => src.StatusDate.ToUniversalTime()));
     }
 }
