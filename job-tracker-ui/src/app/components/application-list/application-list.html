@@ -1,5 +1,17 @@
 <section class="list">
-  <h2>Applications</h2>
+  <div class="toolbar">
+    <h2>Applications</h2>
+
+    <label class="filter">
+      Status
+      <select [(ngModel)]="statusFilter">
+        <option value="All">All</option>
+        @for (status of statuses; track status) {
+          <option [value]="status">{{ statusLabels[status] }}</option>
+        }
+      </select>
+    </label>
+  </div>
 
   @if (loading()) {
     <p class="muted">Loading applications…</p>
@@ -7,7 +19,13 @@
     <p class="error">{{ error() }}</p>
   } @else if (applications().length === 0) {
     <p class="muted">No applications yet.</p>
+  } @else if (filteredApplications().length === 0) {
+    <p class="muted">No applications with status "{{ statusLabels[$any(statusFilter())] }}".</p>
   } @else {
+    <p class="muted count">
+      Showing {{ filteredApplications().length }} of {{ applications().length }}
+    </p>
+
     <table>
       <thead>
         <tr>
@@ -20,7 +38,7 @@
         </tr>
       </thead>
       <tbody>
-        @for (app of applications(); track app.id) {
+        @for (app of filteredApplications(); track app.id) {
           <tr>
             <td>{{ app.company }}</td>
             <td>{{ app.position }}</td>
