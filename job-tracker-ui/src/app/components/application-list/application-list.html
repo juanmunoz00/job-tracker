@@ -1,17 +1,22 @@
 <section class="list">
+  
   <div class="toolbar">
     <h2>Applications</h2>
 
-    <label class="filter">
-      Status
-      <select [(ngModel)]="statusFilter">
-        <option value="All">All</option>
-        @for (status of statuses; track status) {
-          <option [value]="status">{{ statusLabels[status] }}</option>
-        }
-      </select>
-    </label>
-  </div>
+    <div class="toolbar-actions">
+      <label class="filter">
+        Status
+        <select [(ngModel)]="statusFilter">
+          <option value="All">All</option>
+          @for (status of statuses; track status) {
+            <option [value]="status">{{ statusLabels[status] }}</option>
+          }
+        </select>
+      </label>
+
+      <a routerLink="/add" class="btn btn--primary">Add application</a>
+    </div>
+  </div> 
 
   @if (loading()) {
     <p class="muted">Loading applications…</p>
@@ -20,7 +25,7 @@
   } @else if (applications().length === 0) {
     <p class="muted">No applications yet.</p>
   } @else if (filteredApplications().length === 0) {
-    <p class="muted">No applications with status "{{ statusLabels[$any(statusFilter())] }}".</p>
+    <p class="muted">No applications with status "{{ filterLabel() }}".</p>
   } @else {
     <p class="muted count">
       Showing {{ filteredApplications().length }} of {{ applications().length }}

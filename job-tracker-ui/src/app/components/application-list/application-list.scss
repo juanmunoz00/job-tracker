@@ -54,3 +54,9 @@ select {
   font-size: 0.85rem;
   margin: 0.25rem 0 0.75rem;
 }
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}

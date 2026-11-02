@@ -1,1 +1,24 @@
 /* You can add global styles to this file, and also import other style files */
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1a2233;
+  margin: 0;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.45rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn--primary { background: #1f5fbf; color: #fff; }
+.btn--primary:hover { background: #194f9f; }
+.btn--primary:disabled { opacity: 0.6; cursor: default; }
+
+.btn--ghost { background: transparent; color: #3d4a63; border-color: #c9d1de; }
+.btn--ghost:hover { background: #f3f5f9; }
