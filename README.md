@@ -6,7 +6,7 @@ A full-stack, cloud-hosted web application for tracking job applications from fi
 
 | | Link |
 |---|---|
-| **Live app (Angular UI)** | `https://victorious-pebble-08457a31e.4.azurestaticapps.net/` *(replace with the URL from your Static Web App's Overview page)* |
+| **Live app (Angular UI)** | `https://victorious-pebble-08457a31e.4.azurestaticapps.net/`|
 | **Live API docs (Swagger UI)** | https://jobtracker-api-b5efh7c9g8crfwbh.westus3-01.azurewebsites.net/swagger |
 | **Source code** | https://github.com/juanmunoz00/job-tracker |
 
