@@ -10,5 +10,5 @@ export class StatusBadge {
   readonly status = input.required<ApplicationStatus>();
 
   protected readonly label = computed(() => STATUS_LABELS[this.status()]);
-  protected readonly cssClass = computed(() => `badge badge--${this.status().toLowerCase()}`);
+  protected readonly dotClass = computed(() => `dot dot--${this.status().toLowerCase()}`);
 }

@@ -1,24 +1,82 @@
-/* You can add global styles to this file, and also import other style files */
-body {
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: #1a2233;
-  margin: 0;
+:root {
+  --navy: #1c2b4d;
+  --navy-text: #f4f1ea;
+  --navy-muted: #c9d1e3;
+  --amber: #e8a33d;
+  --amber-ink: #1c1406;
+  --bg: #f7f5f1;
+  --surface: #ffffff;
+  --text: #1a2235;
+  --muted: #4f5870;
+  --border: #dcdfe6;
+  --link: #1d3a6e;
+  --danger: #a3281c;
+  --shadow: 0 1px 2px rgba(20, 30, 60, 0.06), 0 8px 24px rgba(20, 30, 60, 0.06);
+
+  --st-applied: #7d869c;
+  --st-phonescreen: #2f6bc0;
+  --st-interview: #7a4fc4;
+  --st-takehome: #c98a1a;
+  --st-offer: #2e8b57;
+  --st-rejected: #c4473a;
+  --st-withdrawn: #c5c9d3;
+
+  --font-display: 'Sora', system-ui, sans-serif;
+  --font-body: 'Source Sans 3', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--bg);
+}
+
+a { color: var(--link); }
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Buttons */
 .btn {
-  display: inline-block;
-  padding: 0.45rem 0.9rem;
-  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0.6rem 1.2rem;
+  border-radius: 999px;
   border: 1px solid transparent;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 600;
   text-decoration: none;
   cursor: pointer;
 }
-
-.btn--primary { background: #1f5fbf; color: #fff; }
-.btn--primary:hover { background: #194f9f; }
+.btn--accent { background: var(--amber); color: var(--amber-ink); }
+.btn--accent:hover { filter: brightness(1.05); }
+.btn--primary { background: var(--navy); color: var(--navy-text); }
+.btn--primary:hover { filter: brightness(1.15); }
 .btn--primary:disabled { opacity: 0.6; cursor: default; }
+.btn--ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn--ghost:hover { background: #f1f2f6; }
 
-.btn--ghost { background: transparent; color: #3d4a63; border-color: #c9d1de; }
-.btn--ghost:hover { background: #f3f5f9; }
+/* Status dots, shared by the badge, chips and pipeline bar */
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.dot--applied     { background: var(--st-applied); }
+.dot--phonescreen { background: var(--st-phonescreen); }
+.dot--interview   { background: var(--st-interview); }
+.dot--takehome    { background: var(--st-takehome); }
+.dot--offer       { background: var(--st-offer); }
+.dot--rejected    { background: var(--st-rejected); }
+.dot--withdrawn   { background: var(--st-withdrawn); box-shadow: inset 0 0 0 1px #9aa0ae; }
