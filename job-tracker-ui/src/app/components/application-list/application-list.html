@@ -15,7 +15,12 @@
         }
       </div>
 
-      <div class="chips">
+      <span id="filter-hint" class="filter-hint">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"></path></svg>
+        Click a status to filter the list
+      </span>
+
+      <div class="chips" role="group" aria-labelledby="filter-hint">
         <button type="button" class="chip" [class.chip--active]="statusFilter() === 'All'" (click)="setFilter('All')">
           All <span class="chip-count">{{ applications().length }}</span>
         </button>

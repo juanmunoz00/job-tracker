@@ -128,3 +128,11 @@ tbody tr + tr td { border-top: 1px solid #f0f1f5; }
   font-size: 0.92rem;
   color: var(--muted);
 }
+
+.filter-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
