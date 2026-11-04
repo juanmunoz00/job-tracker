@@ -11,4 +11,5 @@ import { environment } from '../environments/environment';
 export class App {
   protected readonly swaggerUrl = environment.swaggerUrl;
   protected readonly repoUrl = environment.repoUrl;
+  protected readonly portfolioUrl = environment.portfolioUrl;
 }
