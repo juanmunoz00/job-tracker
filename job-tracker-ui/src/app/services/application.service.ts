@@ -1,16 +1,27 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { Application, ApplicationStatus, CreateApplication } from '../models/application';
+import { Application, ApplicationQuery, ApplicationStatus, CreateApplication, PagedApplications } from '../models/application';
 
 @Injectable({ providedIn: 'root' })
 export class ApplicationService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/applications`;
 
-  getAll(): Observable<Application[]> {
-    return this.http.get<Application[]>(this.baseUrl);
+  getPage(query: ApplicationQuery): Observable<PagedApplications> {
+    let params = new HttpParams()
+      .set('page', query.page)
+      .set('pageSize', query.pageSize);
+
+    if (query.search.trim()) {
+      params = params.set('search', query.search.trim());
+    }
+    if (query.status !== 'All') {
+      params = params.set('status', query.status);
+    }
+
+    return this.http.get<PagedApplications>(this.baseUrl, { params });
   }
 
   getById(id: number): Observable<Application> {

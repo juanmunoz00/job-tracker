@@ -2,84 +2,138 @@
 
   @if (loading()) {
     <p class="muted">Loading applications… the first load can take 30–60 seconds while the server wakes up.</p>
-  } @else if (error()) {
+  } @else if (error() && !result()) {
     <p class="error">{{ error() }}</p>
-  } @else if (applications().length === 0) {
-    <p class="muted">No applications yet. Use <strong>New application</strong> to add the first one.</p>
-  } @else {
+  } @else if (result(); as r) {
 
-    <div class="pipeline" aria-label="Pipeline by status">
-      <div class="bar" aria-hidden="true">
-        @for (status of activeStatuses(); track status) {
-          <div [class]="'seg dot--' + status.toLowerCase()" [style.flex]="counts()[status]"></div>
-        }
-      </div>
-
-      <span id="filter-hint" class="filter-hint">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"></path></svg>
-        Click a status to filter the list
-      </span>
-
-      <div class="chips" role="group" aria-labelledby="filter-hint">
-        <button type="button" class="chip" [class.chip--active]="statusFilter() === 'All'" (click)="setFilter('All')">
-          All <span class="chip-count">{{ applications().length }}</span>
-        </button>
-        @for (status of activeStatuses(); track status) {
-          <button type="button" class="chip" [class.chip--active]="statusFilter() === status" (click)="setFilter(status)">
-            <span [class]="'dot dot--' + status.toLowerCase()"></span>
-            {{ statusLabels[status] }}
-            <span class="chip-count">{{ counts()[status] }}</span>
-          </button>
+    <div class="toolbar">
+      <div class="search">
+        <label for="search" class="sr-only">Search applications</label>
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input #searchBox id="search" type="search"
+               placeholder="Search company, position or country"
+               autocomplete="off"
+               (input)="onSearch(searchBox.value)" />
+        @if (search()) {
+          <button type="button" class="clear" (click)="clearSearch(searchBox)" aria-label="Clear search">×</button>
         }
       </div>
     </div>
 
+    @if (r.allCount > 0 || statusFilter() !== 'All') {
+      <div class="pipeline">
+        <div class="bar" aria-hidden="true">
+          @for (status of visibleStatuses(); track status) {
+            <div [class]="'seg dot--' + status.toLowerCase()" [style.flex]="counts()[status] ?? 0"></div>
+          }
+        </div>
+
+        <span id="filter-hint" class="filter-hint">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"></path></svg>
+          Click a status to filter the list
+        </span>
+
+        <div class="chips" role="group" aria-labelledby="filter-hint">
+          <button type="button" class="chip" [class.chip--active]="statusFilter() === 'All'" (click)="setFilter('All')">
+            All <span class="chip-count">{{ r.allCount }}</span>
+          </button>
+          @for (status of visibleStatuses(); track status) {
+            <button type="button" class="chip" [class.chip--active]="statusFilter() === status" (click)="setFilter(status)">
+              <span [class]="'dot dot--' + status.toLowerCase()"></span>
+              {{ statusLabels[status] }}
+              <span class="chip-count">{{ counts()[status] ?? 0 }}</span>
+            </button>
+          }
+        </div>
+      </div>
+    }
+
+    @if (error()) {
+      <p class="error">{{ error() }}</p>
+    }
     @if (deleteError()) {
       <p class="error">{{ deleteError() }}</p>
     }
 
-    <div class="card">
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Company</th>
-              <th>Position</th>
-              <th>Country</th>
-              <th>Applied</th>
-              <th>Status</th>
-              <th>Updated</th>
-              <th><span class="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (app of filteredApplications(); track app.id) {
+    @if (r.items.length === 0) {
+      <p class="muted empty">
+        @if (search()) {
+          No applications match "{{ search() }}".
+        } @else if (statusFilter() !== 'All') {
+          No applications with this status.
+        } @else {
+          No applications yet. Use <strong>New application</strong> to add the first one.
+        }
+      </p>
+    } @else {
+      <div class="card" [class.is-refreshing]="refreshing()">
+        <div class="table-scroll">
+          <table>
+            <thead>
               <tr>
-                <td class="strong">{{ app.company }}</td>
-                <td>{{ app.position }}</td>
-                <td>{{ app.country }}</td>
-                <td class="mono">{{ app.appliedDate | date: 'yyyy-MM-dd' }}</td>
-                <td><app-status-badge [status]="app.status" /></td>
-                <td class="mono">{{ app.statusDate | date: 'MM-dd HH:mm' }}</td>
-                <td class="row-actions">
-                  @if (confirmingId() === app.id) {
-                    <span class="confirm-text">Delete?</span>
-                    <button type="button" class="link link--danger"
-                            (click)="confirmDelete(app.id)"
-                            [disabled]="deletingId() === app.id">
-                      {{ deletingId() === app.id ? 'Deleting…' : 'Yes' }}
-                    </button>
-                    <button type="button" class="link" (click)="cancelDelete()">No</button>
-                  } @else {
-                    <a [routerLink]="['/edit', app.id]" class="link">Edit</a>
-                    <button type="button" class="link link--danger" (click)="askDelete(app.id)">Delete</button>
-                  }
-                </td>
+                <th>Company</th>
+                <th>Position</th>
+                <th>Country</th>
+                <th>Applied</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th><span class="sr-only">Actions</span></th>
               </tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (app of r.items; track app.id) {
+                <tr>
+                  <td class="strong">{{ app.company }}</td>
+                  <td>{{ app.position }}</td>
+                  <td>{{ app.country }}</td>
+                  <td class="mono">{{ app.appliedDate | date: 'yyyy-MM-dd' }}</td>
+                  <td><app-status-badge [status]="app.status" /></td>
+                  <td class="mono">{{ app.statusDate | date: 'MM-dd HH:mm' }}</td>
+                  <td class="row-actions">
+                    @if (confirmingId() === app.id) {
+                      <span class="confirm-text">Delete?</span>
+                      <button type="button" class="link link--danger"
+                              (click)="confirmDelete(app.id)"
+                              [disabled]="deletingId() === app.id">
+                        {{ deletingId() === app.id ? 'Deleting…' : 'Yes' }}
+                      </button>
+                      <button type="button" class="link" (click)="cancelDelete()">No</button>
+                    } @else {
+                      <a [routerLink]="['/edit', app.id]" class="link">Edit</a>
+                      <button type="button" class="link link--danger" (click)="askDelete(app.id)">Delete</button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <nav class="pager" aria-label="Pagination">
+          <span class="pager-info">
+            Showing <strong>{{ rangeStart() }}–{{ rangeEnd() }}</strong> of <strong>{{ r.totalCount }}</strong>
+          </span>
+
+          <div class="pager-controls">
+            <label for="page-size" class="pager-size">
+              Rows
+              <select #sizeSelect id="page-size" (change)="setPageSize(sizeSelect.value)">
+                @for (size of pageSizes; track size) {
+                  <option [value]="size" [selected]="size === pageSize()">{{ size }}</option>
+                }
+              </select>
+            </label>
+
+            <button type="button" class="btn btn--ghost" (click)="goToPage(r.page - 1)" [disabled]="r.page <= 1">
+              ← Previous
+            </button>
+            <span class="pager-page">Page {{ r.page }} of {{ r.totalPages }}</span>
+            <button type="button" class="btn btn--ghost" (click)="goToPage(r.page + 1)" [disabled]="r.page >= r.totalPages">
+              Next →
+            </button>
+          </div>
+        </nav>
       </div>
-    </div>
+    }
   }
 </section>

@@ -4,6 +4,7 @@ namespace JobTracker.Core.Interfaces;
 
 public interface IApplicationRepository
 {
+    Task<ApplicationPage> GetPagedAsync(string? search, ApplicationStatus? status, int page, int pageSize);
     Task<IEnumerable<Application>> GetAllAsync();
     Task<Application?> GetByIdAsync(int id);
     Task<Application> CreateAsync(Application application);

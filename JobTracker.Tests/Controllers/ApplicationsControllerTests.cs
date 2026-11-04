@@ -34,12 +34,27 @@ public class ApplicationsControllerTests
     };
 
     [Fact]
-    public async Task GetAll_ReturnsOkWithList()
+    public async Task GetAll_ReturnsOkWithPagedResult()
     {
-        _repoMock.Setup(r => r.GetAllAsync()).ReturnsAsync([MakeApp()]);
-        var result = await _controller.GetAll();
+        var counts = new Dictionary<ApplicationStatus, int> { [ApplicationStatus.Applied] = 1 };
+        _repoMock.Setup(r => r.GetPagedAsync(null, null, 1, 10))
+                 .ReturnsAsync(new ApplicationPage([MakeApp()], 1, counts));
+
+        var result = await _controller.GetAll(new ApplicationQueryParameters());
+
         var ok = result.Should().BeOfType<OkObjectResult>().Subject;
-        ok.Value.Should().BeAssignableTo<IEnumerable<ApplicationDto>>();
+        var page = ok.Value.Should().BeOfType<PagedApplicationsDto>().Subject;
+        page.TotalCount.Should().Be(1);
+        page.TotalPages.Should().Be(1);
+        page.AllCount.Should().Be(1);
+        page.StatusCounts["Applied"].Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetAll_InvalidStatus_ReturnsBadRequest()
+    {
+        var result = await _controller.GetAll(new ApplicationQueryParameters { Status = "NotReal" });
+        result.Should().BeOfType<BadRequestObjectResult>();
     }
 
     [Fact]

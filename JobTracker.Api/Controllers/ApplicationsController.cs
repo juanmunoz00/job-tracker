@@ -20,10 +20,34 @@ public class ApplicationsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] ApplicationQueryParameters query)
     {
-        var apps = await _repo.GetAllAsync();
-        return Ok(_mapper.Map<IEnumerable<ApplicationDto>>(apps));
+        ApplicationStatus? status = null;
+        if (!string.IsNullOrWhiteSpace(query.Status) &&
+            !string.Equals(query.Status, "All", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Enum.TryParse<ApplicationStatus>(query.Status, out var parsed) ||
+                !Enum.IsDefined(parsed))
+                return BadRequest($"Invalid status: {query.Status}");
+
+            status = parsed;
+        }
+
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 50);
+
+        var result = await _repo.GetPagedAsync(query.Search, status, page, pageSize);
+
+        return Ok(new PagedApplicationsDto
+        {
+            Items = _mapper.Map<IEnumerable<ApplicationDto>>(result.Items),
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = result.TotalCount,
+            TotalPages = (int)Math.Ceiling(result.TotalCount / (double)pageSize),
+            AllCount = result.StatusCounts.Values.Sum(),
+            StatusCounts = result.StatusCounts.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value)
+        });
     }
 
     [HttpGet("{id}")]

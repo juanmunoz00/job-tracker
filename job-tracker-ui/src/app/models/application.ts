@@ -43,3 +43,20 @@ export const STATUS_LABELS: Record<ApplicationStatus, string> = {
   Rejected: 'Rejected',
   Withdrawn: 'Withdrawn'
 };
+
+export interface PagedApplications {
+  items: Application[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  allCount: number;
+  statusCounts: Partial<Record<ApplicationStatus, number>>;
+}
+
+export interface ApplicationQuery {
+  search: string;
+  status: ApplicationStatus | 'All';
+  page: number;
+  pageSize: number;
+}
