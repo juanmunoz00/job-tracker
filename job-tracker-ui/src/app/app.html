@@ -5,23 +5,36 @@
         Job Tracker <span class="demo-tag">Demo</span>
       </a>
       <nav class="nav">
-        <a routerLink="/" class="nav-link nav-link--current">Applications</a>
+        @if (auth.isLoggedIn()) {
+          <a routerLink="/" class="nav-link nav-link--current">Applications</a>
+        }
         <a [href]="swaggerUrl" target="_blank" rel="noopener" class="nav-link">API docs</a>
         <a [href]="repoUrl" target="_blank" rel="noopener" class="nav-link">GitHub</a>
         <a [href]="portfolioUrl" class="nav-link">← juanmunoz.dev</a>
+        @if (auth.isLoggedIn()) {
+          <span class="user-pill">
+            {{ auth.username() }}
+            <span class="user-role">{{ auth.isAdmin() ? 'Admin' : 'Read-only' }}</span>
+          </span>
+          <button type="button" class="logout" (click)="logout()">Log out</button>
+        }
       </nav>
     </div>
 
-    <div class="band-hero">
-      <div class="hero-text">
-        <h1>Application pipeline</h1>
-        <p>Track every application from first submission to offer. A demo of a .NET 8 REST API and an Angular front end, deployed to Azure. Sample data only.</p>
+    @if (auth.isLoggedIn()) {
+      <div class="band-hero">
+        <div class="hero-text">
+          <h1>Application pipeline</h1>
+          <p>Track every application from first submission to offer. A demo of a .NET 8 REST API and an Angular front end, deployed to Azure. Sample data only.</p>
+        </div>
+        @if (auth.isAdmin()) {
+          <a routerLink="/add" class="btn btn--accent">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            New application
+          </a>
+        }
       </div>
-      <a routerLink="/add" class="btn btn--accent">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
-        New application
-      </a>
-    </div>
+    }
   </div>
 </header>
 
@@ -29,18 +42,20 @@
   <router-outlet />
 </main>
 
-<footer class="page">
-  <section class="about" aria-label="About this demo">
-    <img src="juan-avatar.jpg" alt="Cartoon portrait of Juan Muñoz at his desk" class="about-avatar" width="96" height="96" />
-    <div class="about-text">
-      <span class="about-title">Built by Juan Muñoz</span>
-      <p>Senior software engineer, 20+ years in .NET. This demo shows a layered ASP.NET Core API, EF Core with PostgreSQL, an Angular SPA, unit tests, and CI/CD to Azure with GitHub Actions.</p>
-      <p class="about-note">Heads up: the first load can take 30–60 seconds while the free-tier server wakes up.</p>
-    </div>
-    <div class="about-links">
-      <a [href]="swaggerUrl" target="_blank" rel="noopener" class="btn btn--ghost">API docs</a>
-      <a [href]="repoUrl" target="_blank" rel="noopener" class="btn btn--ghost">GitHub repo</a>
-      <a [href]="portfolioUrl" class="btn btn--accent">View my portfolio</a>
-    </div>
-  </section>
-</footer>
+@if (auth.isLoggedIn()) {
+  <footer class="page">
+    <section class="about" aria-label="About this demo">
+      <img src="juan-avatar.jpg" alt="Cartoon portrait of Juan Muñoz at his desk" class="about-avatar" width="96" height="96" />
+      <div class="about-text">
+        <span class="about-title">Built by Juan Muñoz</span>
+        <p>Senior software engineer, 20+ years in .NET. This demo shows a layered ASP.NET Core API, EF Core with PostgreSQL, JWT authentication with roles, an Angular SPA, unit tests, and CI/CD to Azure with GitHub Actions.</p>
+        <p class="about-note">Heads up: the first load can take 30–60 seconds while the free-tier server wakes up.</p>
+      </div>
+      <div class="about-links">
+        <a [href]="portfolioUrl" class="btn btn--accent">View my portfolio</a>
+        <a [href]="swaggerUrl" target="_blank" rel="noopener" class="btn btn--ghost">API docs</a>
+        <a [href]="repoUrl" target="_blank" rel="noopener" class="btn btn--ghost">GitHub repo</a>
+      </div>
+    </section>
+  </footer>
+}

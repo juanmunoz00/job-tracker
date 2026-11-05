@@ -55,6 +55,7 @@
 
 .nav {
   display: flex;
+  align-items: center;
   gap: 22px;
   flex-wrap: wrap;
 }
@@ -87,6 +88,42 @@
   font-size: 1rem;
   line-height: 1.55;
 }
+
+/* Signed-in user + logout */
+.user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--navy-text);
+  font-size: 0.9rem;
+}
+
+.user-role {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--amber-ink);
+  background: var(--amber);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.logout {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--navy-text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.logout:hover { background: rgba(255, 255, 255, 0.08); }
 
 /* Built by card */
 footer.page { padding-bottom: 40px; }

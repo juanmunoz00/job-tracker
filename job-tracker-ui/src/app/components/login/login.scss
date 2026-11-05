@@ -1,0 +1,200 @@
+.login {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  box-sizing: border-box;
+}
+
+.login-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  background: var(--surface);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+@media (max-width: 760px) {
+  .login-card { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Left: intro panel */
+.intro {
+  background: var(--navy);
+  color: var(--navy-text);
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 999px;
+  object-fit: cover;
+  object-position: 50% 30%;
+  box-shadow: 0 0 0 4px var(--amber);
+}
+
+.intro h1 {
+  margin: 8px 0 0;
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  line-height: 1.2;
+}
+
+.intro p {
+  margin: 0;
+  color: var(--navy-muted);
+  line-height: 1.6;
+}
+
+.intro strong { color: var(--navy-text); }
+
+.intro-note {
+  font-size: 0.92rem;
+  border-left: 3px solid var(--amber);
+  padding-left: 12px;
+}
+
+.signature {
+  margin-top: auto;
+  padding-top: 12px;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--amber);
+}
+
+/* Right: form */
+.form-side {
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-side h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+}
+
+.notice {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fdf3e1;
+  color: #7a4b00;
+  font-size: 0.95rem;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+
+input:focus {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+input.ng-touched.ng-invalid { border-color: var(--danger); }
+
+.password-wrap { position: relative; }
+.password-wrap input { padding-right: 64px; }
+
+.toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--link);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.toggle:hover { background: #f1f2f6; }
+
+.field-error,
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.88rem;
+}
+
+.submit {
+  justify-content: center;
+  width: 100%;
+}
+
+/* Demo accounts */
+.demo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid #eceef3;
+}
+
+.demo-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.demo-account {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.demo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.demo-role { font-weight: 600; }
+
+.demo-desc {
+  font-size: 0.88rem;
+  color: var(--muted);
+}

@@ -3,11 +3,12 @@ using JobTracker.Core.DTOs;
 using JobTracker.Core.Interfaces;
 using JobTracker.Core.Models;
 using Microsoft.AspNetCore.Mvc;
-
+using Microsoft.AspNetCore.Authorization;
 namespace JobTracker.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class ApplicationsController : ControllerBase
 {
     private readonly IApplicationRepository _repo;
@@ -58,6 +59,7 @@ public class ApplicationsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(CreateApplicationDto dto)
     {
         var app = _mapper.Map<Application>(dto);
@@ -67,6 +69,7 @@ public class ApplicationsController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, ApplicationDto dto)
     {
         if (!Enum.TryParse<ApplicationStatus>(dto.Status, out _))
@@ -82,6 +85,7 @@ public class ApplicationsController : ControllerBase
     }
 
     [HttpPatch("{id}/status")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> PatchStatus(int id, PatchStatusDto dto)
     {
         if (!Enum.TryParse<ApplicationStatus>(dto.Status, out var status))
@@ -92,6 +96,7 @@ public class ApplicationsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
     {
         await _repo.DeleteAsync(id);

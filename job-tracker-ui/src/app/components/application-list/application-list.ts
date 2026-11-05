@@ -6,6 +6,7 @@ import { Subject, catchError, debounceTime, distinctUntilChanged, map, of, switc
 import { ApplicationService } from '../../services/application.service';
 import { ApplicationStatus, PagedApplications, STATUSES, STATUS_LABELS } from '../../models/application';
 import { StatusBadge } from '../status-badge/status-badge';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-application-list',
@@ -15,6 +16,7 @@ import { StatusBadge } from '../status-badge/status-badge';
 })
 export class ApplicationList {
   private readonly applicationService = inject(ApplicationService);
+    protected readonly auth = inject(AuthService);
 
   protected readonly statusLabels = STATUS_LABELS;
   protected readonly pageSizes = [5, 10, 20];

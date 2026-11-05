@@ -1,0 +1,75 @@
+<section class="login">
+  <div class="login-card">
+
+    <aside class="intro">
+      <img src="juan-avatar.jpg" alt="Cartoon portrait of Juan Muñoz at his desk" class="avatar" width="120" height="120" />
+      <h1>Welcome to Job Tracker</h1>
+      <p>
+        This is a portfolio demo with sample data, so the login credentials are shared below.
+        Sign in as <strong>admin</strong> to add, edit and delete applications, or as
+        <strong>demo</strong> to explore with read-only access.
+      </p>
+      <p class="intro-note">
+        Sessions end automatically after 5 minutes. The first sign-in can take up to a minute
+        while the free-tier server wakes up.
+      </p>
+      <span class="signature">Built by Juan Muñoz</span>
+    </aside>
+
+    <div class="form-side">
+      <h2>Sign in</h2>
+
+      @if (expired) {
+        <p class="notice" role="status">Your session expired. Please sign in again.</p>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <div class="field">
+          <label for="username">Username</label>
+          <input id="username" type="text" formControlName="username" autocomplete="username" />
+          @if (form.controls.username.touched && form.controls.username.hasError('required')) {
+            <small class="field-error">Enter your username.</small>
+          }
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="password-wrap">
+            <input id="password" [type]="showPassword() ? 'text' : 'password'"
+                   formControlName="password" autocomplete="current-password" />
+            <button type="button" class="toggle" (click)="togglePassword()"
+                    [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'">
+              {{ showPassword() ? 'Hide' : 'Show' }}
+            </button>
+          </div>
+          @if (form.controls.password.touched && form.controls.password.hasError('required')) {
+            <small class="field-error">Enter your password.</small>
+          }
+        </div>
+
+        @if (error()) {
+          <p class="error" role="alert">{{ error() }}</p>
+        }
+
+        <button type="submit" class="btn btn--primary submit" [disabled]="submitting()">
+          {{ submitting() ? 'Signing in…' : 'Sign in' }}
+        </button>
+      </form>
+
+      <div class="demo">
+        <span class="demo-title">Demo accounts</span>
+        @for (account of demoAccounts; track account.username) {
+          <div class="demo-account">
+            <div class="demo-info">
+              <span class="demo-role">{{ account.role }}</span>
+              <span class="mono">{{ account.username }} / {{ account.password }}</span>
+              <span class="demo-desc">{{ account.description }}</span>
+            </div>
+            <button type="button" class="btn btn--ghost" (click)="useAccount(account)">Use</button>
+          </div>
+        }
+      </div>
+    </div>
+
+  </div>
+</section>

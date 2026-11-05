@@ -11,6 +11,7 @@ public class ApplicationDbContext : DbContext
     }
 
     public DbSet<Application> Applications => Set<Application>();
+    public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -38,5 +39,23 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.StatusDate)
                   .HasDefaultValueSql("NOW()");
         });
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Username)
+                  .IsRequired()
+                  .HasMaxLength(50);
+
+            entity.HasIndex(e => e.Username)
+                  .IsUnique();
+
+            entity.Property(e => e.PasswordHash)
+                  .IsRequired();
+
+            entity.Property(e => e.Role)
+                  .HasConversion<string>()
+                  .HasMaxLength(20);
+        });        
     }
 }

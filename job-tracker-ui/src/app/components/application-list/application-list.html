@@ -77,7 +77,9 @@
                 <th>Applied</th>
                 <th>Status</th>
                 <th>Updated</th>
-                <th><span class="sr-only">Actions</span></th>
+                @if (auth.isAdmin()) {
+                  <th><span class="sr-only">Actions</span></th>
+                }                
               </tr>
             </thead>
             <tbody>
@@ -90,17 +92,19 @@
                   <td><app-status-badge [status]="app.status" /></td>
                   <td class="mono">{{ app.statusDate | date: 'MM-dd HH:mm' }}</td>
                   <td class="row-actions">
-                    @if (confirmingId() === app.id) {
-                      <span class="confirm-text">Delete?</span>
-                      <button type="button" class="link link--danger"
-                              (click)="confirmDelete(app.id)"
-                              [disabled]="deletingId() === app.id">
-                        {{ deletingId() === app.id ? 'Deleting…' : 'Yes' }}
-                      </button>
-                      <button type="button" class="link" (click)="cancelDelete()">No</button>
-                    } @else {
-                      <a [routerLink]="['/edit', app.id]" class="link">Edit</a>
-                      <button type="button" class="link link--danger" (click)="askDelete(app.id)">Delete</button>
+                    @if (auth.isAdmin()) {
+                      @if (confirmingId() === app.id) {
+                        <span class="confirm-text">Delete?</span>
+                        <button type="button" class="link link--danger"
+                                (click)="confirmDelete(app.id)"
+                                [disabled]="deletingId() === app.id">
+                          {{ deletingId() === app.id ? 'Deleting…' : 'Yes' }}
+                        </button>
+                        <button type="button" class="link" (click)="cancelDelete()">No</button>
+                      } @else {
+                        <a [routerLink]="['/edit', app.id]" class="link">Edit</a>
+                        <button type="button" class="link link--danger" (click)="askDelete(app.id)">Delete</button>
+                      }
                     }
                   </td>
                 </tr>

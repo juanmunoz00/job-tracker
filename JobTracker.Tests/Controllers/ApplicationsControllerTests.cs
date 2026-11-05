@@ -6,6 +6,8 @@ using JobTracker.Core.Interfaces;
 using JobTracker.Core.Models;
 using JobTracker.Api.Mappings;  
 using Microsoft.AspNetCore.Mvc;
+using System.Reflection;
+using Microsoft.AspNetCore.Authorization;
 using Moq;
 
 namespace JobTracker.Tests.Controllers;
@@ -107,4 +109,38 @@ public class ApplicationsControllerTests
         var result = await _controller.Delete(1);
         result.Should().BeOfType<NoContentResult>();
     }
+
+    [Fact]
+    public void Controller_RequiresAuthentication()
+    {
+        typeof(ApplicationsController)
+            .GetCustomAttribute<AuthorizeAttribute>()
+            .Should().NotBeNull("every applications endpoint must require a logged-in user");
+    }
+
+    [Theory]
+    [InlineData(nameof(ApplicationsController.Create))]
+    [InlineData(nameof(ApplicationsController.Update))]
+    [InlineData(nameof(ApplicationsController.PatchStatus))]
+    [InlineData(nameof(ApplicationsController.Delete))]
+    public void WriteActions_RequireAdminRole(string actionName)
+    {
+        var attribute = typeof(ApplicationsController)
+            .GetMethod(actionName)!
+            .GetCustomAttribute<AuthorizeAttribute>();
+
+        attribute.Should().NotBeNull($"{actionName} must be protected");
+        attribute!.Roles.Should().Be("Admin");
+    }
+
+    [Theory]
+    [InlineData(nameof(ApplicationsController.GetAll))]
+    [InlineData(nameof(ApplicationsController.GetById))]
+    public void ReadActions_DoNotRequireAdminRole(string actionName)
+    {
+        typeof(ApplicationsController)
+            .GetMethod(actionName)!
+            .GetCustomAttribute<AuthorizeAttribute>()
+            .Should().BeNull($"{actionName} should be readable by any logged-in user");
+    }    
 }
