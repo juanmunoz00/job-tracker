@@ -2,13 +2,14 @@
 
 [![Build and Deploy to Azure](https://github.com/juanmunoz00/job-tracker/actions/workflows/deploy.yml/badge.svg)](https://github.com/juanmunoz00/job-tracker/actions/workflows/deploy.yml)
 
-A full-stack, cloud-hosted web application for tracking job applications from first submission to offer or rejection. It has a **.NET 8 REST API** on Azure App Service, an **Angular** single-page application on Azure Static Web Apps, and a **PostgreSQL** database. Both parts deploy automatically through **GitHub Actions** on every push to `main`.
+A full-stack, cloud-hosted web application for tracking job applications from first submission to offer or rejection. It has a **.NET 8 REST API** on Azure App Service with **JWT authentication and roles**, an **Angular** single-page application on Azure Static Web Apps, and a **PostgreSQL** database. Both parts deploy automatically through **GitHub Actions** on every push to `main`.
 
 | | Link |
 |---|---|
-| **Live app (Angular UI)** | `https://victorious-pebble-08457a31e.4.azurestaticapps.net/`|
+| **Live app (Angular UI)** | https://jobtracker.juanmunoz.dev |
 | **Live API docs (Swagger UI)** | https://jobtracker-api-b5efh7c9g8crfwbh.westus3-01.azurewebsites.net/swagger |
 | **Source code** | https://github.com/juanmunoz00/job-tracker |
+| **Demo logins** | `admin` / `Admin123!` (full access) · `demo` / `Demo123!` (read-only). Sample data only. Sessions expire after 5 minutes. |
 
 > Both parts run on Azure free tiers. The first request after a period of inactivity can take 20–30 seconds while the API starts.
 
@@ -37,7 +38,13 @@ A full-stack, cloud-hosted web application for tracking job applications from fi
   - [Stage 16: The add and edit form](#stage-16-the-add-and-edit-form)
   - [Stage 17: Delete with confirmation](#stage-17-delete-with-confirmation)
   - [Stage 18: Deploy the Angular app to Azure Static Web Apps](#stage-18-deploy-the-angular-app-to-azure-static-web-apps)
-  - [Stage 19: Final verification checklist](#stage-19-final-verification-checklist)
+  - [Stage 19: Visual redesign](#stage-19-visual-redesign)
+  - [Stage 20: Middleware — request logging and global error handling](#stage-20-middleware--request-logging-and-global-error-handling)
+  - [Stage 21: Server-side search and pagination (API)](#stage-21-server-side-search-and-pagination-api)
+  - [Stage 22: Authentication with JWT and roles (API)](#stage-22-authentication-with-jwt-and-roles-api)
+  - [Stage 23: Angular — search, pagination, login and roles (final versions)](#stage-23-angular--search-pagination-login-and-roles-final-versions)
+  - [Stage 24: Deploy the new version](#stage-24-deploy-the-new-version)
+  - [Stage 25: Final verification checklist](#stage-25-final-verification-checklist)
   - [Troubleshooting](#troubleshooting)
   - [Cost and security notes](#cost-and-security-notes)
 - [Part 3: Definitions](#part-3-definitions)
@@ -48,12 +55,14 @@ A full-stack, cloud-hosted web application for tracking job applications from fi
 
 ## Features
 
-- View every job application in a table, newest first, with company, position, country, date applied, a color-coded status badge, and the time the status last changed.
-- Filter the table by status (Applied, Phone screen, Interview, Take-home, Offer, Rejected, Withdrawn).
-- Add a new application through a validated form.
-- Edit an existing application, including changing its status. The "last updated" time only changes when the status changes.
-- Delete an application, with an in-row "Delete? Yes / No" confirmation.
-- Browse and call every API endpoint through interactive Swagger documentation.
+- **Sign in** with one of two roles: **Admin** (full access) or **Read-only**. Demo credentials are shown on the login page. Sessions expire after 5 minutes.
+- **Browse** applications in a table, newest first: company, position, country, date applied, a color-coded status, and when the status last changed.
+- **Search** by company, position or country (case-insensitive, runs on the server, waits until you stop typing).
+- **Filter** by clicking a status chip; a pipeline bar shows the mix of statuses at a glance.
+- **Paginate** with Previous/Next and a choice of 5, 10 or 20 rows per page.
+- **Add, edit and delete** applications (Admin only), with validation and an in-row delete confirmation. The "last updated" time only changes when the status changes.
+- **API documentation** with Swagger, including an **Authorize** button for testing tokens.
+- **Request logging and consistent errors**: every request is logged with its status and duration, and every error is returned in the standard ProblemDetails format.
 
 ## Architecture
 
@@ -63,23 +72,29 @@ flowchart LR
     GH -->|workflow 1: build, test, publish| API[Azure App Service<br/>.NET 8 REST API]
     GH -->|workflow 2: build Angular| SWA[Azure Static Web Apps<br/>Angular SPA]
     User[Browser] -->|loads the app| SWA
-    User -->|HTTPS + JSON calls, allowed by CORS| API
+    User -->|1. POST /api/auth/login| API
+    API -->|2. JWT, expires in 5 min| User
+    User -->|3. HTTPS + JSON with Bearer token, allowed by CORS| API
     API -->|EF Core + Npgsql| DB[(PostgreSQL)]
 ```
 
-The browser downloads the Angular application once from Azure Static Web Apps. From then on, the Angular code calls the API directly over [HTTPS](#https). The API reads and writes the PostgreSQL database through [Entity Framework Core](#entity-framework-core). The two Azure services are separate, so the API must explicitly allow the Angular site's address. That rule is called [CORS](#cors).
+The browser downloads the Angular application once from Azure Static Web Apps. The user signs in, and the API returns a short-lived [JWT](#jwt). From then on, the Angular code calls the API directly over [HTTPS](#https), sending the token with every request. The API checks the token and the user's role, then reads and writes the PostgreSQL database through [Entity Framework Core](#entity-framework-core). The two Azure services have different addresses, so the API explicitly allows the Angular site's address. That rule is called [CORS](#cors).
+
+Inside the API, every request passes through a [middleware](#middleware) pipeline: request logging → CORS → global error handling → authentication → authorization → controllers.
 
 ## Tech stack
 
 | Area | Technology |
 |---|---|
 | Backend language and framework | C# 12, [.NET 8](#net), [ASP.NET Core](#aspnet-core) Web API |
-| Data access | [Entity Framework Core](#entity-framework-core) 8 with [Npgsql](#npgsql), code-first [migrations](#migration) |
+| Data access | [Entity Framework Core](#entity-framework-core) 8 with [Npgsql](#npgsql), code-first [migrations](#migration), server-side [pagination](#pagination) and [ILIKE](#ilike) search |
 | Database | [PostgreSQL](#postgresql) (hosted) |
+| Security | [JWT](#jwt) bearer authentication, role-based authorization, [password hashing](#password-hashing) (PBKDF2) |
+| Cross-cutting | Custom [middleware](#middleware): [structured logging](#structured-logging) and global error handling with [ProblemDetails](#problemdetails) |
 | Object mapping | [AutoMapper](#automapper) |
 | API documentation | [Swagger / OpenAPI](#swagger) (Swashbuckle) |
 | Backend tests | [xUnit](#xunit), [Moq](#moq), [FluentAssertions](#fluentassertions), EF Core InMemory |
-| Frontend | [Angular](#angular) 22, [TypeScript](#typescript), [signals](#signal), [reactive forms](#reactive-forms), [SCSS](#css-and-scss) |
+| Frontend | [Angular](#angular) 22, [TypeScript](#typescript), [signals](#signal), [RxJS](#rxjs), [reactive forms](#reactive-forms), [interceptors](#interceptor), [route guards](#route-guard), [SCSS](#css-and-scss) |
 | Hosting | [Azure App Service](#azure-app-service) (API, Linux, F1 Free), [Azure Static Web Apps](#azure-static-web-apps) (UI, Free) |
 | CI/CD | [GitHub Actions](#github-actions), two [workflows](#workflow) |
 
@@ -91,34 +106,54 @@ job-tracker/
 │   ├── deploy.yml                          # API pipeline: build → test → publish → deploy to App Service
 │   └── azure-static-web-apps-<name>.yml    # UI pipeline: build Angular → deploy to Static Web Apps
 ├── JobTracker.sln                          # The .NET solution file
-├── JobTracker.Core/                        # Domain model, DTOs, repository interface (no dependencies)
-├── JobTracker.Infrastructure/              # DbContext, migrations, repository implementation
-├── JobTracker.Api/                         # Controllers, Program.cs, AutoMapper profile, configuration
-├── JobTracker.Tests/                       # xUnit tests
+├── JobTracker.Core/                        # Entities (Application, User), DTOs, repository interfaces (no dependencies)
+├── JobTracker.Infrastructure/              # DbContext, migrations, repository implementations
+├── JobTracker.Api/
+│   ├── Auth/                               # JWT token service, demo user seeder
+│   ├── Controllers/                        # ApplicationsController, AuthController
+│   ├── Middleware/                         # Request logging, global exception handling
+│   ├── Mappings/                           # AutoMapper profile
+│   └── Program.cs                          # Services, authentication, middleware pipeline
+├── JobTracker.Tests/                       # xUnit tests, including security tests
 └── job-tracker-ui/                         # Angular application
-    ├── public/staticwebapp.config.json     # Static Web Apps routing fallback
+    ├── public/                             # staticwebapp.config.json, author portrait
     └── src/
-        ├── environments/                   # API URL for development and production
+        ├── environments/                   # API URL and links for development and production
         └── app/
             ├── models/                     # TypeScript types matching the API's JSON
-            ├── services/                   # ApplicationService (all HTTP calls)
-            └── components/                 # application-list, application-form, status-badge
+            ├── services/                   # ApplicationService (HTTP), AuthService (login, session, auto-logout)
+            ├── interceptors/               # Adds the Bearer token, handles 401
+            ├── guards/                     # Login and admin route guards
+            └── components/                 # login, application-list, application-form, status-badge
 ```
 
 The .NET code follows a [layered architecture](#layered-architecture). `Core` holds the business types and depends on nothing. `Infrastructure` knows how to talk to the database. `Api` exposes HTTP endpoints. Dependencies only point inward, toward `Core`.
 
 ## API endpoints
 
-Base route: `/api/applications`
+| Method | Route | What it does | Who | Success response |
+|---|---|---|---|---|
+| `POST` | `/api/auth/login` | Check username and password; return a JWT | Anyone | `200 OK` + token, or `401` |
+| `GET` | `/api/applications` | One page of applications. Query options: `search`, `status`, `page` (default 1), `pageSize` (default 10, max 50) | Signed in | `200 OK` + page, totals and status counts, or `400` |
+| `GET` | `/api/applications/{id}` | Get one application | Signed in | `200 OK`, or `404` |
+| `POST` | `/api/applications` | Create an application. Status starts as `Applied` | Admin | `201 Created` |
+| `PUT` | `/api/applications/{id}` | Replace an application's editable fields | Admin | `200 OK`, `400`, or `404` |
+| `PATCH` | `/api/applications/{id}/status` | Change only the status | Admin | `200 OK`, `400`, or `404` |
+| `DELETE` | `/api/applications/{id}` | Delete an application | Admin | `204 No Content`, or `404` |
 
-| Method | Route | What it does | Success response |
-|---|---|---|---|
-| `GET` | `/api/applications` | List all applications, newest applied date first | `200 OK` + array |
-| `GET` | `/api/applications/{id}` | Get one application | `200 OK`, or `404 Not Found` |
-| `POST` | `/api/applications` | Create an application. Status starts as `Applied` | `201 Created` |
-| `PUT` | `/api/applications/{id}` | Replace an application's editable fields | `200 OK`, `400`, or `404` |
-| `PATCH` | `/api/applications/{id}/status` | Change only the status | `200 OK`, or `400` |
-| `DELETE` | `/api/applications/{id}` | Delete an application | `204 No Content` |
+Requests without a valid token get `401` ("Authentication required" or "Session expired"); signed-in users without the Admin role get `403`. All errors use the [ProblemDetails](#problemdetails) format.
+
+Example: `GET /api/applications?search=engineer&status=Applied&page=1&pageSize=5` returns
+
+```json
+{
+  "items": [ { "id": 7, "company": "Contoso", "position": "Senior Software Engineer", "country": "USA",
+               "appliedDate": "2026-11-02", "status": "Applied", "statusDate": "2026-11-02T21:45:00Z" } ],
+  "page": 1, "pageSize": 5, "totalCount": 1, "totalPages": 1,
+  "allCount": 3,
+  "statusCounts": { "Applied": 1, "Interview": 1, "Rejected": 1 }
+}
+```
 
 Valid statuses (case-sensitive): `Applied`, `PhoneScreen`, `Interview`, `TakeHome`, `Offer`, `Rejected`, `Withdrawn`.
 
@@ -2515,20 +2550,3293 @@ Wait about 30 seconds, then refresh the Static Web App URL and check each featur
 
 ---
 
-## Stage 19: Final verification checklist
+## Stage 19: Visual redesign
+
+Stages 13–18 built a working first version with a plain look. This stage gives the app its own identity: warm off-white background, a navy header band, amber accents, status **dots** instead of pills, and clickable **status chips** (the chips are finished in Stage 23, which contains the final list component).
+
+> **How to read Stages 19–24.** They evolve the app built in Stages 1–18. When a stage says **"replace the contents"** of a file you created earlier, the newer version is the one to keep. Stage 23 contains the **final** version of every Angular file that changed.
+
+### 19.1 Load the fonts: `job-tracker-ui/src/index.html`
+
+The design uses three [Google Fonts](#google-fonts): **Sora** (headings), **Source Sans 3** (body text) and **IBM Plex Mono** (dates and counts).
+
+**Replace the contents:**
+```html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Job Tracker</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <app-root></app-root>
+</body>
+</html>
+```
+
+### 19.2 One palette for the whole app: `job-tracker-ui/src/styles.scss`
+
+Every color, font and shadow is defined once as a [CSS variable](#css-variables) on `:root`, then used everywhere with `var(--name)`. Changing a color later is a one-line edit. The status colors (`--st-…`) and the `.dot--…` classes live here because three components use them (the badge, the chips and the pipeline bar).
+
+**Replace the contents:**
+```scss
+:root {
+  --navy: #1c2b4d;
+  --navy-text: #f4f1ea;
+  --navy-muted: #c9d1e3;
+  --amber: #e8a33d;
+  --amber-ink: #1c1406;
+  --bg: #f7f5f1;
+  --surface: #ffffff;
+  --text: #1a2235;
+  --muted: #4f5870;
+  --border: #dcdfe6;
+  --link: #1d3a6e;
+  --danger: #a3281c;
+  --shadow: 0 1px 2px rgba(20, 30, 60, 0.06), 0 8px 24px rgba(20, 30, 60, 0.06);
+
+  --st-applied: #7d869c;
+  --st-phonescreen: #2f6bc0;
+  --st-interview: #7a4fc4;
+  --st-takehome: #c98a1a;
+  --st-offer: #2e8b57;
+  --st-rejected: #c4473a;
+  --st-withdrawn: #c5c9d3;
+
+  --font-display: 'Sora', system-ui, sans-serif;
+  --font-body: 'Source Sans 3', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--bg);
+}
+
+a { color: var(--link); }
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0.6rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn--accent { background: var(--amber); color: var(--amber-ink); }
+.btn--accent:hover { filter: brightness(1.05); }
+.btn--primary { background: var(--navy); color: var(--navy-text); }
+.btn--primary:hover { filter: brightness(1.15); }
+.btn--primary:disabled { opacity: 0.6; cursor: default; }
+.btn--ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn--ghost:hover { background: #f1f2f6; }
+
+/* Status dots, shared by the badge, chips and pipeline bar */
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.dot--applied     { background: var(--st-applied); }
+.dot--phonescreen { background: var(--st-phonescreen); }
+.dot--interview   { background: var(--st-interview); }
+.dot--takehome    { background: var(--st-takehome); }
+.dot--offer       { background: var(--st-offer); }
+.dot--rejected    { background: var(--st-rejected); }
+.dot--withdrawn   { background: var(--st-withdrawn); box-shadow: inset 0 0 0 1px #9aa0ae; }
+```
+
+| Rule | Purpose |
+|---|---|
+| `:root { --navy: …; }` | Declares the variables. `:root` means "the whole page" |
+| `.btn--accent`, `.btn--primary`, `.btn--ghost` | Three button styles (amber, navy, outlined) used across the app |
+| `.dot` + `.dot--<status>` | A small colored circle per status, e.g. `.dot--phonescreen` |
+| `.mono` | Monospace text for dates, so digits line up in columns |
+
+### 19.3 Status badge as a dot
+
+The badge now shows a colored dot plus the friendly label. The dot colors come from `styles.scss`.
+
+**`job-tracker-ui/src/app/components/status-badge/status-badge.ts` — replace the contents:**
+```typescript
+import { Component, computed, input } from '@angular/core';
+import { ApplicationStatus, STATUS_LABELS } from '../../models/application';
+
+@Component({
+  selector: 'app-status-badge',
+  templateUrl: './status-badge.html',
+  styleUrl: './status-badge.scss'
+})
+export class StatusBadge {
+  readonly status = input.required<ApplicationStatus>();
+
+  protected readonly label = computed(() => STATUS_LABELS[this.status()]);
+  protected readonly dotClass = computed(() => `dot dot--${this.status().toLowerCase()}`);
+}
+```
+
+**`status-badge.html` — replace the contents:**
+```html
+<span class="status"><span [class]="dotClass()"></span>{{ label() }}</span>
+```
+
+**`status-badge.scss` — replace the contents:**
+```scss
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.92rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+```
+
+`dotClass` builds a class string such as `dot dot--phonescreen` from the status, so each status picks up its color automatically.
+
+### 19.4 Form styles: `job-tracker-ui/src/app/components/application-form/application-form.scss`
+
+The form now sits in a white card, uses the palette variables, and shows an amber outline on the focused field. The form's HTML and TypeScript don't change.
+
+**Replace the contents:**
+```scss
+.form-page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 28px 24px;
+  box-sizing: border-box;
+}
+
+.form-page h2 {
+  margin: 0 0 20px;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+input,
+select {
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+  background: var(--surface);
+  color: var(--text);
+}
+
+input:focus,
+select:focus {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+.muted { color: var(--muted); }
+
+input.ng-touched.ng-invalid { border-color: var(--danger); }
+
+.field-error,
+.error {
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+```
+
+### 19.5 Add the author portrait
+
+The "Built by" card and the login page show a small portrait. Images should be resized before they go into a web app: a 3 MB photo displayed at 96 px wastes bandwidth and slows the first load.
+
+On macOS, the built-in `sips` tool resizes and converts in one command. From the repository root:
+
+```bash
+sips -s format jpeg -s formatOptions 80 -Z 240 "<path to your image>.png" --out job-tracker-ui/public/juan-avatar.jpg
+ls -lh job-tracker-ui/public/juan-avatar.jpg
+```
+
+- `-Z 240` resizes so the longest side is at most 240 px; `formatOptions 80` sets JPEG quality; `--out` writes the new file.
+- The result should be roughly **20–40 KB**.
+- Files in `public/` are served from the site root, so the page refers to it simply as `juan-avatar.jpg`.
+- Keep the large original **outside** the repository so it's never committed by accident.
+
+On Windows, use any image editor (Paint can resize and "Save as" JPEG).
+
+**Check:** with `ng serve` running, the page background turns warm off-white and the fonts change. The header and list get their final look in Stage 23.
+
+---
+
+## Stage 20: Middleware — request logging and global error handling
+
+[Middleware](#middleware) is code that every HTTP request passes through, in order, before it reaches a controller — and that every response passes back through on the way out. Think of layers of an onion: each layer can act before and after the inner layers run. This stage adds two layers of your own.
+
+| Layer | What it does |
+|---|---|
+| **Request logging** (outermost) | Starts a stopwatch, lets the request through, then logs the method, path, query string, status code and duration. |
+| **Global error handling** (just inside CORS) | Wraps everything deeper in a `try/catch`. Any unhandled exception becomes a clean JSON error ([ProblemDetails](#problemdetails)) with the right status code. |
+
+**Why the error handler must sit after `UseCors`.** The CORS middleware adds the `Access-Control-Allow-Origin` header *before* passing the request inward. The error handler then writes its error response **without clearing the headers**, so the CORS header survives and the browser shows the real error (404, 500) instead of a misleading CORS error. ASP.NET Core's default error handling clears headers, which is what caused the "CORS error that wasn't CORS" problem in [Troubleshooting](#troubleshooting).
+
+### 20.1 The error handler: `JobTracker.Api/Middleware/ExceptionHandlingMiddleware.cs`
+
+Create the folder `JobTracker.Api/Middleware` and this file:
+```csharp
+using Microsoft.AspNetCore.Mvc;
+
+namespace JobTracker.Api.Middleware;
+
+public class ExceptionHandlingMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+    private readonly IHostEnvironment _environment;
+
+    public ExceptionHandlingMiddleware(
+        RequestDelegate next,
+        ILogger<ExceptionHandlingMiddleware> logger,
+        IHostEnvironment environment)
+    {
+        _next = next;
+        _logger = logger;
+        _environment = environment;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await _next(context);
+        }
+        catch (Exception ex)
+        {
+            if (context.Response.HasStarted)
+            {
+                _logger.LogError(ex, "Exception after the response started for {Method} {Path}",
+                    context.Request.Method, context.Request.Path);
+                throw;
+            }
+
+            var (statusCode, title) = ex switch
+            {
+                KeyNotFoundException => (StatusCodes.Status404NotFound, "Resource not found"),
+                ArgumentException    => (StatusCodes.Status400BadRequest, "Invalid request"),
+                _                    => (StatusCodes.Status500InternalServerError, "An unexpected error occurred")
+            };
+
+            if (statusCode == StatusCodes.Status500InternalServerError)
+                _logger.LogError(ex, "Unhandled exception for {Method} {Path}",
+                    context.Request.Method, context.Request.Path);
+            else
+                _logger.LogWarning("Handled {ExceptionType} for {Method} {Path}: {Message}",
+                    ex.GetType().Name, context.Request.Method, context.Request.Path, ex.Message);
+
+            var problem = new ProblemDetails
+            {
+                Status = statusCode,
+                Title = title,
+                Detail = statusCode == StatusCodes.Status500InternalServerError && !_environment.IsDevelopment()
+                    ? null
+                    : ex.Message,
+                Instance = context.Request.Path
+            };
+            problem.Extensions["traceId"] = context.TraceIdentifier;
+
+            context.Response.StatusCode = statusCode;
+            await context.Response.WriteAsJsonAsync(problem, options: null, contentType: "application/problem+json");
+        }
+    }
+}
+```
+
+| Code | What it does |
+|---|---|
+| `RequestDelegate _next` | The next layer in the pipeline. `await _next(context)` passes the request inward. |
+| `InvokeAsync(HttpContext context)` | ASP.NET Core calls this for every request. The name and signature are a convention it looks for. |
+| `try { await _next(context); } catch` | Anything thrown deeper (controller, AutoMapper, EF Core) lands here. |
+| `context.Response.HasStarted` | If bytes were already sent, the status code can't change any more, so log and rethrow. |
+| `ex switch { … }` | A C# [switch expression](#switch-expression) mapping exception types to status codes. The repository throws `KeyNotFoundException` for a missing id, so DELETE or PATCH of a missing record now returns **404** instead of **500**. |
+| `Detail = … null` for 500s outside Development | Internal error messages are never shown to the public; they go to the logs instead. |
+| `traceId` | A unique id per request. If a user reports an error, this id finds the exact log line. |
+| No `Response.Clear()` | **This is what keeps the CORS header.** |
+
+### 20.2 The request logger: `JobTracker.Api/Middleware/RequestLoggingMiddleware.cs`
+
+```csharp
+using System.Diagnostics;
+
+namespace JobTracker.Api.Middleware;
+
+public class RequestLoggingMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<RequestLoggingMiddleware> _logger;
+
+    public RequestLoggingMiddleware(RequestDelegate next, ILogger<RequestLoggingMiddleware> logger)
+    {
+        _next = next;
+        _logger = logger;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            await _next(context);
+        }
+        finally
+        {
+            stopwatch.Stop();
+            _logger.LogInformation("HTTP {Method} {Path}{Query} responded {StatusCode} in {ElapsedMs} ms",
+                context.Request.Method,
+                context.Request.Path,
+                context.Request.QueryString,
+                context.Response.StatusCode,
+                stopwatch.ElapsedMilliseconds);
+        }
+    }
+}
+```
+
+- `Stopwatch` is .NET's high-precision timer.
+- `finally` runs even if something throws, so **every** request is logged.
+- `{Method}`, `{Path}`, … are [structured logging](#structured-logging) placeholders: each value is stored as a named field, so log tools can filter by them (for example "every request slower than 1000 ms"). Never build log messages with `$"…"` interpolation, which loses that structure.
+
+### 20.3 Register them in `Program.cs`
+
+The two classes only run once they're added to the pipeline with `app.UseMiddleware<T>()`, and **the order of the `app.Use…` lines is the order of the layers**. The complete final `Program.cs` is in Stage 22.4; the pipeline part looks like this:
+
+```csharp
+app.UseMiddleware<RequestLoggingMiddleware>();      // 1. outermost: times and logs every request
+app.UseSwagger();
+app.UseSwaggerUI();
+app.UseHttpsRedirection();
+app.UseCors("AngularClient");                       // 2. CORS headers before going inward
+app.UseMiddleware<ExceptionHandlingMiddleware>();   // 3. errors → ProblemDetails, CORS kept
+app.UseAuthentication();                            // 4. (Stage 22) reads the token: who is this?
+app.UseAuthorization();                             // 5. checks permissions: are they allowed?
+app.MapControllers();                               // 6. innermost: your controllers
+```
+
+Add `using JobTracker.Api.Middleware;` at the top of `Program.cs`. If you're following along before Stage 22, leave out `UseAuthentication()` for now.
+
+### 20.4 Check locally
+
+```bash
+dotnet build
+dotnet test
+dotnet run --project JobTracker.Api
+```
+
+1. In Swagger, run **GET /api/applications**. The terminal shows a line such as:
+   ```
+   info: JobTracker.Api.Middleware.RequestLoggingMiddleware[0]
+         HTTP GET /api/applications responded 200 in 143 ms
+   ```
+2. Run **DELETE /api/applications/99999** (an id that doesn't exist). You get **404** with a body like:
+   ```json
+   {
+     "title": "Resource not found",
+     "status": 404,
+     "detail": "Application 99999 not found.",
+     "instance": "/api/applications/99999",
+     "traceId": "0HN8..."
+   }
+   ```
+   The terminal shows the error handler's warning first, then the logger's line — the inner layer finishes before the outer one.
+
+> If you get **500** with `"detail": "08P01: SASL authentication failed"`, the middleware is working correctly and the database password in your [user secrets](#user-secrets) is wrong (common right after changing the database password). Copy the current connection string from the App Service setting and set it again with `dotnet user-secrets set`.
+
+### 20.5 See the logs in Azure
+
+Linux App Services don't keep console output until application logging is turned on:
+
+1. Portal → `jobtracker-api` → **Monitoring** → **App Service logs**.
+2. **Application logging:** **File System** · **Retention period (days):** `3` → **Save**.
+3. **Monitoring** → **Log stream**, then use the live app in another tab. One line appears per request.
+
+---
+
+## Stage 21: Server-side search and pagination (API)
+
+Until now, `GET /api/applications` returned **every** row and the browser filtered them. That's fine for 7 rows and wasteful for 7,000. In this stage the API accepts options in the URL and returns **one page**:
+
+```
+GET /api/applications?search=engineer&status=Applied&page=2&pageSize=5
+```
+
+PostgreSQL does the searching, filtering and paging, so only the requested rows travel over the network. The response also carries the **total count** (for "Page 2 of 4") and the **count per status** (for the chips and the pipeline bar).
+
+> **This changes what the endpoint returns.** The Angular app must be updated at the same time (Stage 23), so build both locally and push them together.
+
+### 21.1 The new types
+
+**`JobTracker.Core/Models/ApplicationPage.cs`** — how the repository hands back one page:
+```csharp
+namespace JobTracker.Core.Models;
+
+public record ApplicationPage(
+    IReadOnlyList<Application> Items,
+    int TotalCount,
+    IReadOnlyDictionary<ApplicationStatus, int> StatusCounts);
+```
+
+A [record](#record) is a C# type made for carrying data: one line declares the properties and the constructor, and it's immutable by default.
+
+**`JobTracker.Core/DTOs/ApplicationQueryParameters.cs`** — the options read from the URL:
+```csharp
+namespace JobTracker.Core.DTOs;
+
+public class ApplicationQueryParameters
+{
+    public string? Search { get; set; }
+    public string? Status { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+}
+```
+
+ASP.NET Core fills this from the query string through [model binding](#model-binding). Values the URL leaves out keep their defaults (page 1, 10 per page).
+
+**`JobTracker.Core/DTOs/PagedApplicationsDto.cs`** — the JSON the API returns:
+```csharp
+namespace JobTracker.Core.DTOs;
+
+public class PagedApplicationsDto
+{
+    public IEnumerable<ApplicationDto> Items { get; set; } = [];
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalCount { get; set; }
+    public int TotalPages { get; set; }
+    public int AllCount { get; set; }
+    public Dictionary<string, int> StatusCounts { get; set; } = [];
+}
+```
+
+`AllCount` feeds the **All** chip (everything matching the search, in any status). `StatusCounts` uses text keys (`"PhoneScreen"`) so the JSON is readable.
+
+### 21.2 The repository interface: `JobTracker.Core/Interfaces/IApplicationRepository.cs`
+
+**Replace the contents** (one new method, `GetPagedAsync`):
+```csharp
+using JobTracker.Core.Models;
+
+namespace JobTracker.Core.Interfaces;
+
+public interface IApplicationRepository
+{
+    Task<ApplicationPage> GetPagedAsync(string? search, ApplicationStatus? status, int page, int pageSize);
+    Task<IEnumerable<Application>> GetAllAsync();
+    Task<Application?> GetByIdAsync(int id);
+    Task<Application> CreateAsync(Application application);
+    Task<Application> UpdateAsync(Application application);
+    Task<Application> PatchStatusAsync(int id, ApplicationStatus status);
+    Task DeleteAsync(int id);
+}
+```
+
+### 21.3 The repository: `JobTracker.Infrastructure/Repositories/ApplicationRepository.cs`
+
+**Replace the contents:**
+```csharp
+using JobTracker.Core.Interfaces;
+using JobTracker.Core.Models;
+using JobTracker.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+
+namespace JobTracker.Infrastructure.Repositories;
+
+public class ApplicationRepository : IApplicationRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public ApplicationRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<IEnumerable<Application>> GetAllAsync()
+        => await _context.Applications
+                         .AsNoTracking()
+                         .OrderByDescending(a => a.AppliedDate)
+                         .ToListAsync();
+
+    public async Task<Application?> GetByIdAsync(int id)
+        => await _context.Applications
+                         .AsNoTracking()
+                         .FirstOrDefaultAsync(a => a.Id == id);
+
+    public async Task<ApplicationPage> GetPagedAsync(string? search, ApplicationStatus? status, int page, int pageSize)
+    {
+        IQueryable<Application> query = _context.Applications.AsNoTracking();
+
+        // 1. Search: case-insensitive match on company, position or country
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var escaped = search.Trim()
+                .Replace("\\", "\\\\")
+                .Replace("%", "\\%")
+                .Replace("_", "\\_");
+            var pattern = $"%{escaped}%";
+
+            query = query.Where(a =>
+                EF.Functions.ILike(a.Company, pattern) ||
+                EF.Functions.ILike(a.Position, pattern) ||
+                EF.Functions.ILike(a.Country, pattern));
+        }
+
+        // 2. Count per status (after search, before the status filter) for the chips
+        var statusCounts = await query
+            .GroupBy(a => a.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Count);
+
+        // 3. Status filter
+        if (status is not null)
+        {
+            var selected = status.Value;
+            query = query.Where(a => a.Status == selected);
+        }
+
+        // 4. Total rows matching search + status (for "Page X of Y")
+        var totalCount = await query.CountAsync();
+
+        // 5. Sort and take one page
+        var items = await query
+            .OrderByDescending(a => a.AppliedDate)
+            .ThenByDescending(a => a.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return new ApplicationPage(items, totalCount, statusCounts);
+    }
+
+    public async Task<Application> CreateAsync(Application application)
+    {
+        _context.Applications.Add(application);
+        await _context.SaveChangesAsync();
+        return application;
+    }
+
+    public async Task<Application> UpdateAsync(Application application)
+    {
+        _context.Applications.Update(application);
+        await _context.SaveChangesAsync();
+        return application;
+    }
+
+    public async Task<Application> PatchStatusAsync(int id, ApplicationStatus status)
+    {
+        var application = await _context.Applications.FindAsync(id)
+            ?? throw new KeyNotFoundException($"Application {id} not found.");
+
+        application.Status = status;
+        application.StatusDate = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        return application;
+    }
+
+    public async Task DeleteAsync(int id)
+    {
+        var application = await _context.Applications.FindAsync(id)
+            ?? throw new KeyNotFoundException($"Application {id} not found.");
+
+        _context.Applications.Remove(application);
+        await _context.SaveChangesAsync();
+    }
+}
+```
+
+`GetPagedAsync` builds one query step by step: start with all rows → narrow by search → count per status → narrow by status → count the total → sort → take one page.
+
+| Part | Meaning | SQL it becomes (roughly) |
+|---|---|---|
+| `IQueryable<Application> query` | An [IQueryable](#iqueryable): a query **under construction**. Nothing runs until a method like `ToListAsync()` | — |
+| `EF.Functions.ILike(a.Company, pattern)` | PostgreSQL's **case-insensitive** LIKE ([ILIKE](#ilike)) | `WHERE "Company" ILIKE '%engineer%'` |
+| `.Replace("%", "\\%")`… | **Escaping**: a search for `50%` treats `%` as a literal character, not a wildcard | — |
+| `GroupBy(a => a.Status)` + `Count()` | Counts per status, in the database. Done **before** the status filter so other chips keep their numbers while one is selected | `SELECT "Status", COUNT(*) … GROUP BY "Status"` |
+| `CountAsync()` | Total matching rows across all pages | `SELECT COUNT(*) …` |
+| `ThenByDescending(a => a.Id)` | A tiebreaker: rows with the same date otherwise come back in an unpredictable order, and a row could appear on two pages | `ORDER BY …, "Id" DESC` |
+| `Skip((page - 1) * pageSize)` / `Take(pageSize)` | [Pagination](#pagination): skip earlier pages, return one page | `OFFSET … LIMIT …` |
+
+`EF.Functions.ILike` comes from the Npgsql provider and works with PostgreSQL only.
+
+### 21.4 The controller's `GetAll`
+
+The complete final controller is in Stage 22.3. The new `GetAll` reads the query parameters, validates them, and asks the repository for one page:
+
+```csharp
+    [HttpGet]
+    public async Task<IActionResult> GetAll([FromQuery] ApplicationQueryParameters query)
+    {
+        ApplicationStatus? status = null;
+        if (!string.IsNullOrWhiteSpace(query.Status) &&
+            !string.Equals(query.Status, "All", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Enum.TryParse<ApplicationStatus>(query.Status, out var parsed) ||
+                !Enum.IsDefined(parsed))
+                return BadRequest($"Invalid status: {query.Status}");
+
+            status = parsed;
+        }
+
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 50);
+
+        var result = await _repo.GetPagedAsync(query.Search, status, page, pageSize);
+
+        return Ok(new PagedApplicationsDto { … });
+    }
+```
+
+- `[FromQuery]` fills `query` from the URL.
+- `Enum.IsDefined` rejects numbers such as `?status=42`, which `TryParse` would otherwise accept.
+- `Math.Max(1, …)` blocks page 0 or negative pages; `Math.Clamp(…, 1, 50)` stops anyone requesting a million rows at once.
+- `Math.Ceiling(total / (double)pageSize)` gives 7 rows ÷ 5 = **2 pages**. The `(double)` cast avoids integer division.
+
+### 21.5 Check in Swagger
+
+Run the API locally and open **GET /api/applications** in Swagger. It now shows four inputs: **Search**, **Status**, **Page**, **PageSize**.
+
+| # | Fill in | Expect |
+|---|---|---|
+| 1 | nothing | Up to 10 items, plus `totalCount`, `totalPages`, `allCount`, `statusCounts` |
+| 2 | PageSize `3`, Page `3` | Only the last row(s); no row repeats across pages |
+| 3 | Search `engineer` | Only matching rows, in any capitalization |
+| 4 | Status `Withdrawn` | Only Withdrawn rows, while `statusCounts` still lists every status |
+| 5 | Status `NotReal` | **400** `Invalid status: NotReal` |
+| 6 | PageSize `500` | Capped at 50 per page |
+
+---
+
+## Stage 22: Authentication with JWT and roles (API)
+
+The app now requires a login, with two roles:
+
+| Role | Can do |
+|---|---|
+| **Admin** | Everything: read, add, edit, change status, delete |
+| **ReadOnly** | Read, search and filter only |
+
+How it works:
+1. The user sends a username and password to `POST /api/auth/login`.
+2. The API checks the password against a stored **hash** and, if it matches, returns a [JWT](#jwt): a small signed "pass" containing the user's id, username, role and an expiry time **5 minutes** later.
+3. The browser sends that token with every request in an `Authorization: Bearer <token>` header.
+4. The API checks the token's signature and expiry, then allows or refuses the request based on the role.
+
+Because the token itself proves who the caller is, the server keeps no session — JWT authentication is **stateless**.
+
+Users are stored in your own `Users` table, with passwords **hashed** — never stored as plain text. A [hash](#password-hashing) is a one-way scramble: the API can check "does this password produce the same hash?", but nobody can turn the hash back into the password.
+
+### 22.1 Add the JWT package
+
+From the repository root (in zsh, keep the quotes around the version):
+```bash
+dotnet add JobTracker.Api package Microsoft.AspNetCore.Authentication.JwtBearer --version "8.0.*"
+```
+
+### 22.2 Users in the database
+
+**`JobTracker.Core/Models/User.cs`:**
+```csharp
+namespace JobTracker.Core.Models;
+
+public class User
+{
+    public int Id { get; set; }
+    public string Username { get; set; } = string.Empty;
+    public string PasswordHash { get; set; } = string.Empty;
+    public UserRole Role { get; set; } = UserRole.ReadOnly;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public enum UserRole
+{
+    Admin,
+    ReadOnly
+}
+```
+
+**`JobTracker.Infrastructure/Data/ApplicationDbContext.cs` — replace the contents** (adds the `Users` table):
+```csharp
+using JobTracker.Core.Models;
+using Microsoft.EntityFrameworkCore;
+
+namespace JobTracker.Infrastructure.Data;
+
+public class ApplicationDbContext : DbContext
+{
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+        : base(options)
+    {
+    }
+
+    public DbSet<Application> Applications => Set<Application>();
+    public DbSet<User> Users => Set<User>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<Application>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Company)
+                  .IsRequired()
+                  .HasMaxLength(200);
+
+            entity.Property(e => e.Country)
+                  .IsRequired()
+                  .HasMaxLength(100);
+
+            entity.Property(e => e.Position)
+                  .IsRequired()
+                  .HasMaxLength(200);
+
+            entity.Property(e => e.Status)
+                  .HasConversion<int>();   // store enum as integer
+
+            entity.Property(e => e.StatusDate)
+                  .HasDefaultValueSql("NOW()");
+        });
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Username)
+                  .IsRequired()
+                  .HasMaxLength(50);
+
+            entity.HasIndex(e => e.Username)
+                  .IsUnique();
+
+            entity.Property(e => e.PasswordHash)
+                  .IsRequired();
+
+            entity.Property(e => e.Role)
+                  .HasConversion<string>()
+                  .HasMaxLength(20);
+        });        
+    }
+}
+```
+
+- `HasIndex(e => e.Username).IsUnique()` makes the database itself refuse two users with the same username.
+- `HasConversion<string>()` stores the role as readable text (`"Admin"`), not a number.
+
+**Create and apply the migration:**
+```bash
+dotnet build
+dotnet ef migrations add AddUsers -p JobTracker.Infrastructure -s JobTracker.Api
+dotnet ef database update -p JobTracker.Infrastructure -s JobTracker.Api
+```
+`database update` uses the connection string in your user secrets. The migration only **adds** a table, so the live app keeps working.
+
+**Settings: `JobTracker.Api/appsettings.json` — replace the contents:**
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": ""
+  },
+  "Cors": {
+  "AllowedOrigins": [
+      "http://localhost:4200",
+      "https://victorious-pebble-08457a31e.4.azurestaticapps.net",
+      "https://jobtracker.juanmunoz.dev"
+    ]
+  },
+  "DemoUsers": {
+    "Admin":    { "Username": "admin", "Password": "Admin123!" },
+    "ReadOnly": { "Username": "demo",  "Password": "Demo123!" }
+  },
+  "Jwt": {
+    "Issuer": "jobtracker-api",
+    "Audience": "jobtracker-ui",
+    "ExpiryMinutes": 5
+  },    
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*"
+}
+```
+
+- `Cors:AllowedOrigins` lists every address allowed to call the API: local development, the Static Web App, and the custom domain. (Origins can also be added in Azure as `Cors__AllowedOrigins__N` app settings, as in Stage 18.6.)
+- `DemoUsers` are deliberately public: this demo uses sample data, and the login page shows these credentials so visitors can try both roles. **Never do this with real accounts.**
+- `Jwt:Issuer` (who created the token), `Jwt:Audience` (who it's for) and `Jwt:ExpiryMinutes` are public settings.
+- **The signing key is not here.** Whoever has it can create valid tokens for any role, so it's a secret.
+
+**Store the signing key in user secrets** (a random 48-byte key):
+```bash
+dotnet user-secrets set "Jwt:Key" "$(openssl rand -base64 48)" --project JobTracker.Api
+```
+`openssl rand -base64 48` generates the random key; `$( … )` inserts it into the command. On Windows without OpenSSL, generate a long random string with a password manager instead.
+
+**Demo users created on startup: `JobTracker.Api/Auth/DemoUserSeeder.cs`:**
+```csharp
+using JobTracker.Core.Models;
+using JobTracker.Infrastructure.Data;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace JobTracker.Api.Auth;
+
+public static class DemoUserSeeder
+{
+    public static async Task SeedAsync(IServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DemoUserSeeder");
+        var hasher = new PasswordHasher<User>();
+
+        var demoUsers = new[]
+        {
+            (Username: config["DemoUsers:Admin:Username"] ?? "admin",
+             Password: config["DemoUsers:Admin:Password"] ?? "Admin123!",
+             Role: UserRole.Admin),
+            (Username: config["DemoUsers:ReadOnly:Username"] ?? "demo",
+             Password: config["DemoUsers:ReadOnly:Password"] ?? "Demo123!",
+             Role: UserRole.ReadOnly)
+        };
+
+        foreach (var (username, password, role) in demoUsers)
+        {
+            if (await db.Users.AnyAsync(u => u.Username == username))
+                continue;
+
+            var user = new User { Username = username, Role = role };
+            user.PasswordHash = hasher.HashPassword(user, password);
+            db.Users.Add(user);
+
+            logger.LogInformation("Seeded demo user {Username} ({Role})", username, role);
+        }
+
+        await db.SaveChangesAsync();
+    }
+}
+```
+
+| Code | Meaning |
+|---|---|
+| `services.CreateScope()` | The `DbContext` is registered per request. At startup there's no request, so a temporary scope is created. |
+| `PasswordHasher<User>` | ASP.NET Core's built-in hasher: [PBKDF2](#password-hashing) with a random **salt** and many iterations, so the same password produces a different hash every time and guessing is slow. |
+| `AnyAsync(...)` then `continue` | Only adds users that don't exist, so it's safe to run on every startup. |
+
+### 22.3 Login: DTOs, repository, token service and controllers
+
+**`JobTracker.Core/DTOs/LoginRequestDto.cs`:**
+```csharp
+namespace JobTracker.Core.DTOs;
+
+public class LoginRequestDto
+{
+    public string Username { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+}
+```
+
+**`JobTracker.Core/DTOs/LoginResponseDto.cs`:**
+```csharp
+namespace JobTracker.Core.DTOs;
+
+public class LoginResponseDto
+{
+    public string Token { get; set; } = string.Empty;
+    public DateTime ExpiresAt { get; set; }
+    public string Username { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+}
+```
+
+`ExpiresAt`, `Username` and `Role` are returned with the token so the Angular app can show who's signed in, hide admin buttons and schedule the automatic logout without decoding the token.
+
+**`JobTracker.Core/Interfaces/IUserRepository.cs`:**
+```csharp
+using JobTracker.Core.Models;
+
+namespace JobTracker.Core.Interfaces;
+
+public interface IUserRepository
+{
+    Task<User?> GetByUsernameAsync(string username);
+}
+```
+
+**`JobTracker.Infrastructure/Repositories/UserRepository.cs`:**
+```csharp
+using JobTracker.Core.Interfaces;
+using JobTracker.Core.Models;
+using JobTracker.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+
+namespace JobTracker.Infrastructure.Repositories;
+
+public class UserRepository : IUserRepository
+{
+    private readonly ApplicationDbContext _context;
+
+    public UserRepository(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<User?> GetByUsernameAsync(string username)
+        => await _context.Users
+                         .AsNoTracking()
+                         .FirstOrDefaultAsync(u => u.Username == username);
+}
+```
+
+**`JobTracker.Api/Auth/JwtTokenService.cs`** — creates the token:
+```csharp
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using JobTracker.Core.Models;
+using Microsoft.IdentityModel.Tokens;
+
+namespace JobTracker.Api.Auth;
+
+public class JwtTokenService
+{
+    private readonly IConfiguration _config;
+
+    public JwtTokenService(IConfiguration config)
+    {
+        _config = config;
+    }
+
+    public (string Token, DateTime ExpiresAt) CreateToken(User user)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var expiresAt = DateTime.UtcNow.AddMinutes(_config.GetValue("Jwt:ExpiryMinutes", 5));
+
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.Role, user.Role.ToString()),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: _config["Jwt:Issuer"],
+            audience: _config["Jwt:Audience"],
+            claims: claims,
+            expires: expiresAt,
+            signingCredentials: credentials);
+
+        return (new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
+    }
+}
+```
+
+| Code | Meaning |
+|---|---|
+| `SymmetricSecurityKey` | The secret key as bytes. "Symmetric": the same key signs and verifies. |
+| `HmacSha256` | The signing algorithm (HS256). |
+| `Claim(Sub, …)`, `Claim(ClaimTypes.Name, …)`, `Claim(ClaimTypes.Role, …)` | [Claims](#claims): facts about the user carried inside the token. `[Authorize(Roles = "Admin")]` reads the role claim. |
+| `Claim(Jti, Guid)` | A unique id per token. |
+| `WriteToken(token)` | Produces the final `header.payload.signature` string. |
+
+> The payload of a JWT is **encoded, not encrypted** — anyone can read it (try pasting one into jwt.io). The signature only makes it impossible to *change* without the key. Never put passwords or secrets inside a token.
+
+**`JobTracker.Api/Controllers/AuthController.cs`:**
+```csharp
+using JobTracker.Api.Auth;
+using JobTracker.Core.DTOs;
+using JobTracker.Core.Interfaces;
+using JobTracker.Core.Models;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+
+namespace JobTracker.Api.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class AuthController : ControllerBase
+{
+    private readonly IUserRepository _users;
+    private readonly JwtTokenService _tokens;
+    private readonly PasswordHasher<User> _hasher = new();
+
+    public AuthController(IUserRepository users, JwtTokenService tokens)
+    {
+        _users = users;
+        _tokens = tokens;
+    }
+
+    [HttpPost("login")]
+    public async Task<IActionResult> Login(LoginRequestDto dto)
+    {
+        var user = await _users.GetByUsernameAsync(dto.Username.Trim());
+
+        if (user is null ||
+            _hasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password) == PasswordVerificationResult.Failed)
+        {
+            return Unauthorized(new { message = "Invalid username or password." });
+        }
+
+        var (token, expiresAt) = _tokens.CreateToken(user);
+
+        return Ok(new LoginResponseDto
+        {
+            Token = token,
+            ExpiresAt = expiresAt,
+            Username = user.Username,
+            Role = user.Role.ToString()
+        });
+    }
+}
+```
+
+- `VerifyHashedPassword` hashes the submitted password with the stored salt and compares the result.
+- **The same message for an unknown user and a wrong password** is deliberate: different messages would let attackers discover which usernames exist.
+
+**`JobTracker.Api/Controllers/ApplicationsController.cs` — replace the contents** (final version, with pagination and role locks):
+```csharp
+using AutoMapper;
+using JobTracker.Core.DTOs;
+using JobTracker.Core.Interfaces;
+using JobTracker.Core.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+namespace JobTracker.Api.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class ApplicationsController : ControllerBase
+{
+    private readonly IApplicationRepository _repo;
+    private readonly IMapper _mapper;
+
+    public ApplicationsController(IApplicationRepository repo, IMapper mapper)
+    {
+        _repo = repo;
+        _mapper = mapper;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll([FromQuery] ApplicationQueryParameters query)
+    {
+        ApplicationStatus? status = null;
+        if (!string.IsNullOrWhiteSpace(query.Status) &&
+            !string.Equals(query.Status, "All", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Enum.TryParse<ApplicationStatus>(query.Status, out var parsed) ||
+                !Enum.IsDefined(parsed))
+                return BadRequest($"Invalid status: {query.Status}");
+
+            status = parsed;
+        }
+
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 50);
+
+        var result = await _repo.GetPagedAsync(query.Search, status, page, pageSize);
+
+        return Ok(new PagedApplicationsDto
+        {
+            Items = _mapper.Map<IEnumerable<ApplicationDto>>(result.Items),
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = result.TotalCount,
+            TotalPages = (int)Math.Ceiling(result.TotalCount / (double)pageSize),
+            AllCount = result.StatusCounts.Values.Sum(),
+            StatusCounts = result.StatusCounts.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value)
+        });
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var app = await _repo.GetByIdAsync(id);
+        return app is null ? NotFound() : Ok(_mapper.Map<ApplicationDto>(app));
+    }
+
+    [HttpPost]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Create(CreateApplicationDto dto)
+    {
+        var app = _mapper.Map<Application>(dto);
+        var created = await _repo.CreateAsync(app);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id },
+            _mapper.Map<ApplicationDto>(created));
+    }
+
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Update(int id, ApplicationDto dto)
+    {
+        if (!Enum.TryParse<ApplicationStatus>(dto.Status, out _))
+            return BadRequest($"Invalid status: {dto.Status}");
+
+        var existing = await _repo.GetByIdAsync(id);
+        if (existing is null)
+            return NotFound();
+
+        _mapper.Map(dto, existing);
+        var updated = await _repo.UpdateAsync(existing);
+        return Ok(_mapper.Map<ApplicationDto>(updated));
+    }
+
+    [HttpPatch("{id}/status")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> PatchStatus(int id, PatchStatusDto dto)
+    {
+        if (!Enum.TryParse<ApplicationStatus>(dto.Status, out var status))
+            return BadRequest($"Invalid status: {dto.Status}");
+
+        var patched = await _repo.PatchStatusAsync(id, status);
+        return Ok(_mapper.Map<ApplicationDto>(patched));
+    }
+
+    [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        await _repo.DeleteAsync(id);
+        return NoContent();
+    }
+}
+```
+
+| Endpoint | Who can call it |
+|---|---|
+| `POST /api/auth/login` | Anyone |
+| `GET /api/applications`, `GET /api/applications/{id}` | Any signed-in user (`[Authorize]` on the class) |
+| `POST`, `PUT`, `PATCH`, `DELETE` | Admin only (`[Authorize(Roles = "Admin")]` on each action) |
+
+### 22.4 The final `Program.cs`
+
+**`JobTracker.Api/Program.cs` — replace the contents:**
+```csharp
+using System.Text;
+using JobTracker.Api.Auth;
+using JobTracker.Api.Mappings;
+using JobTracker.Api.Middleware;
+using JobTracker.Core.Interfaces;
+using JobTracker.Infrastructure.Data;
+using JobTracker.Infrastructure.Repositories;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Mvc;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+builder.Services.AddAutoMapper(typeof(ApplicationProfile).Assembly);
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<IApplicationRepository, ApplicationRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddSingleton<JwtTokenService>();
+
+// --- JWT authentication ---
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32)
+    throw new InvalidOperationException("Jwt:Key is missing or shorter than 32 bytes. Set it in user secrets or app settings.");
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+
+                var expired = context.AuthenticateFailure is SecurityTokenExpiredException;
+                var problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status401Unauthorized,
+                    Title = expired ? "Session expired" : "Authentication required",
+                    Detail = expired
+                        ? "Your session has expired. Please log in again."
+                        : "Log in to get a token, then send it as 'Authorization: Bearer <token>'.",
+                    Instance = context.Request.Path
+                };
+
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(problem, options: null, contentType: "application/problem+json");
+            },
+            OnForbidden = async context =>
+            {
+                var problem = new ProblemDetails
+                {
+                    Status = StatusCodes.Status403Forbidden,
+                    Title = "Forbidden",
+                    Detail = "Your account has read-only access. Log in as admin to make changes.",
+                    Instance = context.Request.Path
+                };
+
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(problem, options: null, contentType: "application/problem+json");
+            }
+        };        
+    });
+
+builder.Services.AddAuthorization();
+
+// --- Swagger, with an "Authorize" button for testing tokens ---
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Paste the token from POST /api/auth/login"
+    });
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+
+builder.Services.AddCors(options =>
+    options.AddPolicy("AngularClient", policy =>
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()));
+
+var app = builder.Build();
+
+// Middleware pipeline — order matters.
+app.UseMiddleware<RequestLoggingMiddleware>();      // 1. outermost: times and logs every request
+app.UseSwagger();
+app.UseSwaggerUI();
+app.UseHttpsRedirection();
+app.UseCors("AngularClient");                       // 2. CORS headers before going inward
+app.UseMiddleware<ExceptionHandlingMiddleware>();   // 3. errors → ProblemDetails, CORS kept
+app.UseAuthentication();                            // 4. reads the token: who is this?
+app.UseAuthorization();                             // 5. checks permissions: are they allowed?
+app.MapControllers();                               // 6. innermost: your controllers
+
+try
+{
+    await DemoUserSeeder.SeedAsync(app.Services);
+}
+catch (Exception ex)
+{
+    app.Logger.LogError(ex, "Demo user seeding failed");
+}
+
+app.Run();
+```
+
+| Part | Meaning |
+|---|---|
+| Key check + `throw` | **Fail fast**: if `Jwt:Key` is missing or too short, the API refuses to start with a clear message instead of running insecurely. |
+| `TokenValidationParameters` | For every request with a token: check issuer, audience, signature and expiry. |
+| `ClockSkew = 30 seconds` | The default tolerance is 5 minutes, which would silently turn a 5-minute token into 10. |
+| `OnChallenge` | Runs when a login is required but the token is missing, invalid or expired → **401** as ProblemDetails, with "Session expired" when the token has expired. `HandleResponse()` stops ASP.NET Core adding its default empty response. |
+| `OnForbidden` | Runs when the user is signed in but lacks the role → **403** as ProblemDetails. |
+| Swagger security definition | Adds an **Authorize** button to Swagger for pasting a token. |
+| `UseAuthentication()` before `UseAuthorization()` | First work out *who* the caller is, then *whether* they're allowed. |
+| Seeder in `try/catch` | If the database is briefly unreachable at startup (free tiers sleep), the API still starts and logs the problem. |
+
+### 22.5 Security tests: `JobTracker.Tests/Controllers/ApplicationsControllerTests.cs`
+
+The controller tests call methods directly, which bypasses the `[Authorize]` attributes. The extra tests at the end check, through [reflection](#reflection), that the locks themselves are in place — so nobody can remove one without a failing test. The `GetAll` tests use the new paged result.
+
+**Replace the contents:**
+```csharp
+using AutoMapper;
+using FluentAssertions;
+using JobTracker.Api.Controllers;
+using JobTracker.Core.DTOs;
+using JobTracker.Core.Interfaces;
+using JobTracker.Core.Models;
+using JobTracker.Api.Mappings;  
+using Microsoft.AspNetCore.Mvc;
+using System.Reflection;
+using Microsoft.AspNetCore.Authorization;
+using Moq;
+
+namespace JobTracker.Tests.Controllers;
+
+public class ApplicationsControllerTests
+{
+    private readonly Mock<IApplicationRepository> _repoMock;
+    private readonly IMapper _mapper;
+    private readonly ApplicationsController _controller;
+
+    public ApplicationsControllerTests()
+    {
+        _repoMock = new Mock<IApplicationRepository>();
+        var config = new MapperConfiguration(cfg => cfg.AddProfile<ApplicationProfile>());
+        _mapper = config.CreateMapper();
+        _controller = new ApplicationsController(_repoMock.Object, _mapper);
+    }
+
+    private static Application MakeApp(int id = 1) => new()
+    {
+        Id = id, Company = "Acme Corp", Country = "US",
+        Position = "Senior Software Engineer",
+        AppliedDate = new DateOnly(2026, 9, 21),
+        Status = ApplicationStatus.Applied,
+        StatusDate = DateTime.UtcNow
+    };
+
+    [Fact]
+    public async Task GetAll_ReturnsOkWithPagedResult()
+    {
+        var counts = new Dictionary<ApplicationStatus, int> { [ApplicationStatus.Applied] = 1 };
+        _repoMock.Setup(r => r.GetPagedAsync(null, null, 1, 10))
+                 .ReturnsAsync(new ApplicationPage([MakeApp()], 1, counts));
+
+        var result = await _controller.GetAll(new ApplicationQueryParameters());
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var page = ok.Value.Should().BeOfType<PagedApplicationsDto>().Subject;
+        page.TotalCount.Should().Be(1);
+        page.TotalPages.Should().Be(1);
+        page.AllCount.Should().Be(1);
+        page.StatusCounts["Applied"].Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetAll_InvalidStatus_ReturnsBadRequest()
+    {
+        var result = await _controller.GetAll(new ApplicationQueryParameters { Status = "NotReal" });
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetById_ExistingId_ReturnsOk()
+    {
+        _repoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeApp());
+        var result = await _controller.GetById(1);
+        result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetById_MissingId_ReturnsNotFound()
+    {
+        _repoMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Application?)null);
+        var result = await _controller.GetById(999);
+        result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Fact]
+    public async Task Create_ValidDto_ReturnsCreatedAtAction()
+    {
+        var dto = new CreateApplicationDto { Company = "Acme", Country = "US",
+            Position = "Engineer", AppliedDate = new DateOnly(2026, 9, 21) };
+        _repoMock.Setup(r => r.CreateAsync(It.IsAny<Application>()))
+                 .ReturnsAsync(MakeApp());
+        var result = await _controller.Create(dto);
+        result.Should().BeOfType<CreatedAtActionResult>();
+    }
+
+    [Fact]
+    public async Task PatchStatus_ValidStatus_ReturnsOk()
+    {
+        _repoMock.Setup(r => r.PatchStatusAsync(1, ApplicationStatus.Interview))
+                 .ReturnsAsync(MakeApp());
+        var result = await _controller.PatchStatus(1, new PatchStatusDto { Status = "Interview" });
+        result.Should().BeOfType<OkObjectResult>();
+    }
+
+    [Fact]
+    public async Task PatchStatus_InvalidStatus_ReturnsBadRequest()
+    {
+        var result = await _controller.PatchStatus(1, new PatchStatusDto { Status = "NotReal" });
+        result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task Delete_ExistingId_ReturnsNoContent()
+    {
+        _repoMock.Setup(r => r.DeleteAsync(1)).Returns(Task.CompletedTask);
+        var result = await _controller.Delete(1);
+        result.Should().BeOfType<NoContentResult>();
+    }
+
+    [Fact]
+    public void Controller_RequiresAuthentication()
+    {
+        typeof(ApplicationsController)
+            .GetCustomAttribute<AuthorizeAttribute>()
+            .Should().NotBeNull("every applications endpoint must require a logged-in user");
+    }
+
+    [Theory]
+    [InlineData(nameof(ApplicationsController.Create))]
+    [InlineData(nameof(ApplicationsController.Update))]
+    [InlineData(nameof(ApplicationsController.PatchStatus))]
+    [InlineData(nameof(ApplicationsController.Delete))]
+    public void WriteActions_RequireAdminRole(string actionName)
+    {
+        var attribute = typeof(ApplicationsController)
+            .GetMethod(actionName)!
+            .GetCustomAttribute<AuthorizeAttribute>();
+
+        attribute.Should().NotBeNull($"{actionName} must be protected");
+        attribute!.Roles.Should().Be("Admin");
+    }
+
+    [Theory]
+    [InlineData(nameof(ApplicationsController.GetAll))]
+    [InlineData(nameof(ApplicationsController.GetById))]
+    public void ReadActions_DoNotRequireAdminRole(string actionName)
+    {
+        typeof(ApplicationsController)
+            .GetMethod(actionName)!
+            .GetCustomAttribute<AuthorizeAttribute>()
+            .Should().BeNull($"{actionName} should be readable by any logged-in user");
+    }    
+}
+```
+
+- `[Theory]` + `[InlineData(…)]` runs the same test once per value.
+- `nameof(…)` gives a method name as text, checked by the compiler, so renaming a method can't silently break a test.
+
+> Earlier versions of this repository contained a file `JobTracker.Tests/Repositories/ApplicationRepositoryTests.cs` that held a copy of the repository class instead of tests. It breaks the build as soon as the interface gains a method. If you have it, delete it: `git rm JobTracker.Tests/Repositories/ApplicationRepositoryTests.cs`.
+
+### 22.6 Check in Swagger
+
+```bash
+dotnet build
+dotnet test
+dotnet run --project JobTracker.Api
+```
+
+In Swagger, use **Authorize** (top right) to paste a token — **only the token**, Swagger adds `Bearer ` itself — and **Logout** in the same dialog to remove it.
+
+| # | Token | Call | Expect |
+|---|---|---|---|
+| 1 | none | GET /api/applications | **401** "Authentication required" |
+| 2 | `demo` / `Demo123!` | GET /api/applications | **200** |
+| 3 | `demo` | DELETE /api/applications/{id} | **403** "Your account has read-only access…" |
+| 4 | `admin` / `Admin123!` | POST an application | **201** |
+| 5 | `admin` | DELETE it | **204** |
+| 6 | admin token, after waiting 5½ minutes | GET /api/applications | **401** "Session expired" |
+
+The first run also logs `Seeded demo user admin (Admin)` and `Seeded demo user demo (ReadOnly)`.
+
+---
+
+## Stage 23: Angular — search, pagination, login and roles (final versions)
+
+This stage brings the Angular app up to date with Stages 21 and 22. Every file below is shown in its **final** form.
+
+| Piece | Job |
+|---|---|
+| **Models and services** | Ask the API for one page at a time; log in, keep the token, know the role, log out automatically when the token expires |
+| **[Interceptor](#interceptor)** | Attach `Authorization: Bearer <token>` to every API call; log out when the API answers 401 |
+| **[Guards](#route-guard)** | Keep pages behind login: the list needs any user, Add/Edit need Admin |
+| **Login page** | Portrait, explanation, the two demo accounts with **Use** buttons, and an "expired" message |
+| **Header** | Signed-in user and role, **Log out**, and **New application** for admins only |
+| **List** | Debounced search, status chips and pipeline bar from server counts, pager, and Edit/Delete for admins only |
+
+### 23.1 Run everything locally
+
+While developing, Angular must talk to the API on your machine (the live API only changes when you push). You need three terminal tabs:
+
+| Tab | Folder | Command |
+|---|---|---|
+| 1 | repository root | `dotnet run --project JobTracker.Api` |
+| 2 | `job-tracker-ui` | `ng serve` |
+| 3 | either | git and other commands |
+
+### 23.2 Environment files
+
+**`job-tracker-ui/src/environments/environment.development.ts`** (used by `ng serve`; points at the local API):
+```typescript
+export const environment = {
+  production: false,
+  apiUrl: 'http://localhost:5296/api',
+  swaggerUrl: 'https://jobtracker-api-b5efh7c9g8crfwbh.westus3-01.azurewebsites.net/swagger',
+  portfolioUrl: 'https://juanmunoz.dev',
+  repoUrl: 'https://github.com/juanmunoz00/job-tracker'
+};
+```
+
+**`job-tracker-ui/src/environments/environment.ts`** (used by production builds; points at Azure):
+```typescript
+export const environment = {
+  production: true,   // false in environment.development.ts
+  apiUrl: 'https://jobtracker-api-b5efh7c9g8crfwbh.westus3-01.azurewebsites.net/api',
+  swaggerUrl: 'https://jobtracker-api-b5efh7c9g8crfwbh.westus3-01.azurewebsites.net/swagger',
+  portfolioUrl: 'https://juanmunoz.dev',
+  repoUrl: 'https://github.com/juanmunoz00/job-tracker'
+};
+```
+
+Use the port your `dotnet run` shows. Each file must contain exactly **one** `export const environment` block, and both files need the **same property names** — a property missing from the development file gives `TS2339: Property '…' does not exist`.
+
+### 23.3 Models
+
+**`job-tracker-ui/src/app/models/application.ts` — replace the contents:**
+```typescript
+export type ApplicationStatus =
+  | 'Applied'
+  | 'PhoneScreen'
+  | 'Interview'
+  | 'TakeHome'
+  | 'Offer'
+  | 'Rejected'
+  | 'Withdrawn';
+
+export interface Application {
+  id: number;
+  company: string;
+  country: string;
+  position: string;
+  appliedDate: string;
+  status: ApplicationStatus;
+  statusDate: string;
+}
+
+export interface CreateApplication {
+  company: string;
+  country: string;
+  position: string;
+  appliedDate: string;
+}
+
+export const STATUSES: ApplicationStatus[] = [
+  'Applied',
+  'PhoneScreen',
+  'Interview',
+  'TakeHome',
+  'Offer',
+  'Rejected',
+  'Withdrawn'
+];
+
+export const STATUS_LABELS: Record<ApplicationStatus, string> = {
+  Applied: 'Applied',
+  PhoneScreen: 'Phone screen',
+  Interview: 'Interview',
+  TakeHome: 'Take-home',
+  Offer: 'Offer',
+  Rejected: 'Rejected',
+  Withdrawn: 'Withdrawn'
+};
+
+export interface PagedApplications {
+  items: Application[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  allCount: number;
+  statusCounts: Partial<Record<ApplicationStatus, number>>;
+}
+
+export interface ApplicationQuery {
+  search: string;
+  status: ApplicationStatus | 'All';
+  page: number;
+  pageSize: number;
+}
+```
+
+`PagedApplications` mirrors `PagedApplicationsDto`. `Partial<Record<…>>` means "an object with **some** of the status keys" — the API only includes statuses that have rows.
+
+**`job-tracker-ui/src/app/models/auth.ts`:**
+```typescript
+export type UserRole = 'Admin' | 'ReadOnly';
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  expiresAt: string;   // ISO date in UTC, e.g. "2026-11-05T03:10:00Z"
+  username: string;
+  role: UserRole;
+}
+```
+
+### 23.4 Services
+
+**`job-tracker-ui/src/app/services/application.service.ts` — replace the contents:**
+```typescript
+import { Injectable, inject } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
+import { Application, ApplicationQuery, ApplicationStatus, CreateApplication, PagedApplications } from '../models/application';
+
+@Injectable({ providedIn: 'root' })
+export class ApplicationService {
+  private readonly http = inject(HttpClient);
+  private readonly baseUrl = `${environment.apiUrl}/applications`;
+
+  getPage(query: ApplicationQuery): Observable<PagedApplications> {
+    let params = new HttpParams()
+      .set('page', query.page)
+      .set('pageSize', query.pageSize);
+
+    if (query.search.trim()) {
+      params = params.set('search', query.search.trim());
+    }
+    if (query.status !== 'All') {
+      params = params.set('status', query.status);
+    }
+
+    return this.http.get<PagedApplications>(this.baseUrl, { params });
+  }
+
+  getById(id: number): Observable<Application> {
+    return this.http.get<Application>(`${this.baseUrl}/${id}`);
+  }
+
+  create(app: CreateApplication): Observable<Application> {
+    return this.http.post<Application>(this.baseUrl, app);
+  }
+
+  update(id: number, app: Application): Observable<Application> {
+    return this.http.put<Application>(`${this.baseUrl}/${id}`, app);
+  }
+
+  patchStatus(id: number, status: ApplicationStatus): Observable<Application> {
+    return this.http.patch<Application>(`${this.baseUrl}/${id}/status`, { status });
+  }
+
+  delete(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  }
+}
+```
+
+- [HttpParams](#httpparams) builds the query string safely, including URL-encoding (a search like `C/C++` doesn't break the URL).
+- `HttpParams` is immutable: `.set()` returns a **new** object, hence `params = params.set(…)`.
+- `getAll()` is gone: the endpoint now returns a page, not a plain array.
+
+**`job-tracker-ui/src/app/services/auth.service.ts`:**
+```typescript
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
+import { Observable, tap } from 'rxjs';
+import { environment } from '../../environments/environment';
+import { LoginRequest, LoginResponse } from '../models/auth';
+
+const STORAGE_KEY = 'jobtracker.session';
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private readonly http = inject(HttpClient);
+  private readonly router = inject(Router);
+
+  private readonly session = signal<LoginResponse | null>(null);
+  private logoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+  readonly isLoggedIn = computed(() => this.session() !== null);
+  readonly isAdmin = computed(() => this.session()?.role === 'Admin');
+  readonly username = computed(() => this.session()?.username ?? '');
+
+  constructor() {
+    this.restore();
+  }
+
+  get token(): string | null {
+    return this.session()?.token ?? null;
+  }
+
+  login(credentials: LoginRequest): Observable<LoginResponse> {
+    return this.http
+      .post<LoginResponse>(`${environment.apiUrl}/auth/login`, credentials)
+      .pipe(tap(response => this.start(response)));
+  }
+
+  logout(reason?: 'expired'): void {
+    this.clearTimer();
+    this.session.set(null);
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* storage unavailable */ }
+    this.router.navigate(['/login'], reason ? { queryParams: { reason } } : {});
+  }
+
+  private start(session: LoginResponse): void {
+    const msLeft = new Date(session.expiresAt).getTime() - Date.now();
+    if (msLeft <= 0) {
+      this.logout('expired');
+      return;
+    }
+
+    this.session.set(session);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(session)); } catch { /* storage unavailable */ }
+
+    this.clearTimer();
+    this.logoutTimer = setTimeout(() => this.logout('expired'), msLeft);
+  }
+
+  private restore(): void {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+
+      const saved = JSON.parse(raw) as LoginResponse;
+      if (new Date(saved.expiresAt).getTime() > Date.now()) {
+        this.start(saved);
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch { /* corrupt or unavailable storage: start logged out */ }
+  }
+
+  private clearTimer(): void {
+    if (this.logoutTimer) {
+      clearTimeout(this.logoutTimer);
+      this.logoutTimer = null;
+    }
+  }
+}
+```
+
+| Code | Meaning |
+|---|---|
+| `session` signal | The current login (token, username, role, expiry) or `null`. |
+| `isLoggedIn`, `isAdmin`, `username` | Computed signals read by templates and guards. |
+| `login(…)` + `tap(…)` | Calls the login endpoint; `tap` runs `start()` with the response without changing it. |
+| `start(…)` | Saves the session to [localStorage](#localstorage) (so a refresh keeps you signed in) and sets a timer for the exact expiry moment. |
+| `setTimeout(…, msLeft)` | The **fixed 5-minute expiry**: when time is up, log out and go to `/login?reason=expired`. |
+| `restore()` | On page load, restores a saved session **only if it hasn't expired**. |
+
+> **About localStorage:** it's the simplest place for a token and common in demos. The trade-off: if an attacker ever injected script into the page ([XSS](#xss)), they could read it. Production systems often use HttpOnly cookies, which scripts can't read.
+
+### 23.5 Interceptor, guards and app configuration
+
+Create the folder `job-tracker-ui/src/app/interceptors` and **`auth.interceptor.ts`**:
+```typescript
+import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { catchError, throwError } from 'rxjs';
+import { environment } from '../../environments/environment';
+import { AuthService } from '../services/auth.service';
+
+export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  const auth = inject(AuthService);
+  const token = auth.token;
+  const isApiCall = req.url.startsWith(environment.apiUrl);
+  const isLoginCall = req.url.endsWith('/auth/login');
+
+  const request = token && isApiCall
+    ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
+    : req;
+
+  return next(request).pipe(
+    catchError((error: unknown) => {
+      if (error instanceof HttpErrorResponse && error.status === 401 && isApiCall && !isLoginCall) {
+        auth.logout(token ? 'expired' : undefined);
+      }
+      return throwError(() => error);
+    })
+  );
+};
+```
+
+- Requests are immutable, so `req.clone({ setHeaders: … })` makes a copy with the header added.
+- The token is only sent to **your** API (`isApiCall`), never to other sites.
+- On a 401 (other than a failed login), the user is logged out and sent to the login page.
+
+Create the folder `job-tracker-ui/src/app/guards` and **`auth.guards.ts`**:
+```typescript
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+import { AuthService } from '../services/auth.service';
+
+/** Any logged-in user (Admin or ReadOnly). */
+export const authGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  return auth.isLoggedIn() ? true : router.createUrlTree(['/login']);
+};
+
+/** Admin only. Read-only users are sent back to the list. */
+export const adminGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  if (!auth.isLoggedIn()) return router.createUrlTree(['/login']);
+  return auth.isAdmin() ? true : router.createUrlTree(['/']);
+};
+
+/** Login page only for logged-out visitors. */
+export const guestGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  return auth.isLoggedIn() ? router.createUrlTree(['/']) : true;
+};
+```
+
+A guard runs **before** a route opens: returning `true` lets the user in, returning a `UrlTree` redirects. Guards are a convenience — anyone can bypass them in their own browser. **The real protection is `[Authorize]` on the API.**
+
+**`job-tracker-ui/src/app/app.config.ts` — replace the contents:**
+```typescript
+import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { provideRouter, withComponentInputBinding } from '@angular/router';
+import { routes } from './app.routes';
+import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
+import { authInterceptor } from './interceptors/auth.interceptor';
+
+export const appConfig: ApplicationConfig = {
+   providers: [
+     provideBrowserGlobalErrorListeners(),
+     provideRouter(routes, withComponentInputBinding()),
+         provideHttpClient(withFetch(), withInterceptors([authInterceptor]))
+   ]
+};
+```
+
+`withInterceptors([authInterceptor])` puts the interceptor in front of every HttpClient request.
+
+**`job-tracker-ui/src/app/app.routes.ts` — replace the contents:**
+```typescript
+import { Routes } from '@angular/router';
+import { ApplicationList } from './components/application-list/application-list';
+import { ApplicationForm } from './components/application-form/application-form';
+import { Login } from './components/login/login';
+import { adminGuard, authGuard, guestGuard } from './guards/auth.guards';
+
+export const routes: Routes = [
+  { path: 'login', component: Login, canActivate: [guestGuard] },
+  { path: '', component: ApplicationList, canActivate: [authGuard] },
+  { path: 'add', component: ApplicationForm, canActivate: [adminGuard] },
+  { path: 'edit/:id', component: ApplicationForm, canActivate: [adminGuard] },
+  { path: '**', redirectTo: '' }
+];
+```
+
+### 23.6 Header, layout and "Built by" card
+
+**`job-tracker-ui/src/app/app.ts` — replace the contents:**
+```typescript
+import { Component, inject } from '@angular/core';
+import { RouterLink, RouterOutlet } from '@angular/router';
+import { environment } from '../environments/environment';
+import { AuthService } from './services/auth.service';
+
+@Component({
+  selector: 'app-root',
+  imports: [RouterOutlet, RouterLink],
+  templateUrl: './app.html',
+  styleUrl: './app.scss'
+})
+export class App {
+  protected readonly auth = inject(AuthService);
+
+  protected readonly swaggerUrl = environment.swaggerUrl;
+  protected readonly repoUrl = environment.repoUrl;
+  protected readonly portfolioUrl = environment.portfolioUrl;
+
+  protected logout(): void {
+    this.auth.logout();
+  }
+}
+```
+
+**`job-tracker-ui/src/app/app.html` — replace the contents:**
+```html
+<header class="band">
+  <div class="band-inner">
+    <div class="band-top">
+      <a routerLink="/" class="brand">
+        Job Tracker <span class="demo-tag">Demo</span>
+      </a>
+      <nav class="nav">
+        @if (auth.isLoggedIn()) {
+          <a routerLink="/" class="nav-link nav-link--current">Applications</a>
+        }
+        <a [href]="swaggerUrl" target="_blank" rel="noopener" class="nav-link">API docs</a>
+        <a [href]="repoUrl" target="_blank" rel="noopener" class="nav-link">GitHub</a>
+        <a [href]="portfolioUrl" class="nav-link">← juanmunoz.dev</a>
+        @if (auth.isLoggedIn()) {
+          <span class="user-pill">
+            {{ auth.username() }}
+            <span class="user-role">{{ auth.isAdmin() ? 'Admin' : 'Read-only' }}</span>
+          </span>
+          <button type="button" class="logout" (click)="logout()">Log out</button>
+        }
+      </nav>
+    </div>
+
+    @if (auth.isLoggedIn()) {
+      <div class="band-hero">
+        <div class="hero-text">
+          <h1>Application pipeline</h1>
+          <p>Track every application from first submission to offer. A demo of a .NET 8 REST API and an Angular front end, deployed to Azure. Sample data only.</p>
+        </div>
+        @if (auth.isAdmin()) {
+          <a routerLink="/add" class="btn btn--accent">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            New application
+          </a>
+        }
+      </div>
+    }
+  </div>
+</header>
+
+<main class="page">
+  <router-outlet />
+</main>
+
+@if (auth.isLoggedIn()) {
+  <footer class="page">
+    <section class="about" aria-label="About this demo">
+      <img src="juan-avatar.jpg" alt="Cartoon portrait of Juan Muñoz at his desk" class="about-avatar" width="96" height="96" />
+      <div class="about-text">
+        <span class="about-title">Built by Juan Muñoz</span>
+        <p>Senior software engineer, 20+ years in .NET. This demo shows a layered ASP.NET Core API, EF Core with PostgreSQL, JWT authentication with roles, an Angular SPA, unit tests, and CI/CD to Azure with GitHub Actions.</p>
+        <p class="about-note">Heads up: the first load can take 30–60 seconds while the free-tier server wakes up.</p>
+      </div>
+      <div class="about-links">
+        <a [href]="portfolioUrl" class="btn btn--accent">View my portfolio</a>
+        <a [href]="swaggerUrl" target="_blank" rel="noopener" class="btn btn--ghost">API docs</a>
+        <a [href]="repoUrl" target="_blank" rel="noopener" class="btn btn--ghost">GitHub repo</a>
+      </div>
+    </section>
+  </footer>
+}
+```
+
+- Signed out: a slim header (brand, API docs, GitHub, portfolio). The login page has its own portrait, so the footer card is hidden.
+- Signed in: username and role, **Log out**, the hero, and the "Built by" card. **New application** shows only for admins.
+- External links use `[href]` with `target="_blank" rel="noopener"` (new tab, safely); the portfolio link opens in the same tab.
+
+**`job-tracker-ui/src/app/app.scss` — replace the contents** (the whole file — if only part of it is pasted, the header loses its styling and the white **Log out** text becomes invisible on the light background):
+```scss
+.band {
+  background: var(--navy);
+  color: var(--navy-text);
+}
+
+.band-inner,
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.band-inner {
+  padding-top: 18px;
+  padding-bottom: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.band-top,
+.band-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+}
+
+.band-top { align-items: center; }
+.band-hero { align-items: flex-end; }
+
+.brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--navy-text);
+  text-decoration: none;
+}
+
+.demo-tag {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--amber-ink);
+  background: var(--amber);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.nav-link {
+  color: var(--navy-muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+.nav-link:hover,
+.nav-link--current { color: var(--navy-text); }
+
+.hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 640px;
+}
+
+.hero-text h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2.1rem;
+  line-height: 1.15;
+}
+
+.hero-text p {
+  margin: 0;
+  color: var(--navy-muted);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+/* Signed-in user + logout */
+.user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--navy-text);
+  font-size: 0.9rem;
+}
+
+.user-role {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--amber-ink);
+  background: var(--amber);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.logout {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--navy-text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.logout:hover { background: rgba(255, 255, 255, 0.08); }
+
+/* Built by card */
+footer.page { padding-bottom: 40px; }
+
+.about {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow);
+}
+
+.about-avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 999px;
+  object-fit: cover;
+  object-position: 50% 30%;
+  box-shadow: 0 0 0 3px var(--amber);
+}
+
+.about-text {
+  flex: 999 1 420px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.about-text p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.about-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.about-note {
+  font-size: 0.9rem;
+  color: #6b5a3a !important;
+}
+
+.about-links {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+```
+
+### 23.7 The login page
+
+```bash
+ng generate component components/login
+```
+
+**`login.ts` — replace the contents:**
+```typescript
+import { Component, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
+import { AuthService } from '../../services/auth.service';
+
+interface DemoAccount {
+  username: string;
+  password: string;
+  role: string;
+  description: string;
+}
+
+@Component({
+  selector: 'app-login',
+  imports: [ReactiveFormsModule],
+  templateUrl: './login.html',
+  styleUrl: './login.scss'
+})
+export class Login {
+  private readonly fb = inject(FormBuilder);
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+
+  protected readonly demoAccounts: DemoAccount[] = [
+    { username: 'admin', password: 'Admin123!', role: 'Admin', description: 'Add, edit and delete applications' },
+    { username: 'demo', password: 'Demo123!', role: 'Read-only', description: 'Browse, search and filter' }
+  ];
+
+  protected readonly expired = this.route.snapshot.queryParamMap.get('reason') === 'expired';
+  protected readonly submitting = signal(false);
+  protected readonly error = signal<string | null>(null);
+  protected readonly showPassword = signal(false);
+
+  protected readonly form = this.fb.nonNullable.group({
+    username: ['', Validators.required],
+    password: ['', Validators.required]
+  });
+
+  protected useAccount(account: DemoAccount): void {
+    this.form.setValue({ username: account.username, password: account.password });
+    this.error.set(null);
+  }
+
+  protected togglePassword(): void {
+    this.showPassword.update(shown => !shown);
+  }
+
+  protected submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    this.submitting.set(true);
+    this.error.set(null);
+
+    this.auth.login(this.form.getRawValue()).subscribe({
+      next: () => this.router.navigate(['/']),
+      error: (err: HttpErrorResponse) => {
+        this.error.set(err.status === 401
+          ? 'Invalid username or password.'
+          : 'Could not reach the server. It may be waking up, so try again in a few seconds.');
+        this.submitting.set(false);
+      }
+    });
+  }
+}
+```
+
+- `ActivatedRoute` reads `?reason=expired`, added by the automatic logout.
+- `form.setValue(…)` fills both fields when a **Use** button is clicked.
+- A 401 means wrong credentials; any other error means the server couldn't be reached (often a cold start).
+- The demo credentials appear here and in `appsettings.json`. Change both together.
+
+**`login.html` — replace the contents:**
+```html
+<section class="login">
+  <div class="login-card">
+
+    <aside class="intro">
+      <img src="juan-avatar.jpg" alt="Cartoon portrait of Juan Muñoz at his desk" class="avatar" width="120" height="120" />
+      <h1>Welcome to Job Tracker</h1>
+      <p>
+        This is a portfolio demo with sample data, so the login credentials are shared below.
+        Sign in as <strong>admin</strong> to add, edit and delete applications, or as
+        <strong>demo</strong> to explore with read-only access.
+      </p>
+      <p class="intro-note">
+        Sessions end automatically after 5 minutes. The first sign-in can take up to a minute
+        while the free-tier server wakes up.
+      </p>
+      <span class="signature">Built by Juan Muñoz</span>
+    </aside>
+
+    <div class="form-side">
+      <h2>Sign in</h2>
+
+      @if (expired) {
+        <p class="notice" role="status">Your session expired. Please sign in again.</p>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <div class="field">
+          <label for="username">Username</label>
+          <input id="username" type="text" formControlName="username" autocomplete="username" />
+          @if (form.controls.username.touched && form.controls.username.hasError('required')) {
+            <small class="field-error">Enter your username.</small>
+          }
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="password-wrap">
+            <input id="password" [type]="showPassword() ? 'text' : 'password'"
+                   formControlName="password" autocomplete="current-password" />
+            <button type="button" class="toggle" (click)="togglePassword()"
+                    [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'">
+              {{ showPassword() ? 'Hide' : 'Show' }}
+            </button>
+          </div>
+          @if (form.controls.password.touched && form.controls.password.hasError('required')) {
+            <small class="field-error">Enter your password.</small>
+          }
+        </div>
+
+        @if (error()) {
+          <p class="error" role="alert">{{ error() }}</p>
+        }
+
+        <button type="submit" class="btn btn--primary submit" [disabled]="submitting()">
+          {{ submitting() ? 'Signing in…' : 'Sign in' }}
+        </button>
+      </form>
+
+      <div class="demo">
+        <span class="demo-title">Demo accounts</span>
+        @for (account of demoAccounts; track account.username) {
+          <div class="demo-account">
+            <div class="demo-info">
+              <span class="demo-role">{{ account.role }}</span>
+              <span class="mono">{{ account.username }} / {{ account.password }}</span>
+              <span class="demo-desc">{{ account.description }}</span>
+            </div>
+            <button type="button" class="btn btn--ghost" (click)="useAccount(account)">Use</button>
+          </div>
+        }
+      </div>
+    </div>
+
+  </div>
+</section>
+```
+
+- `autocomplete="username"` / `"current-password"` help browsers and password managers.
+- `[type]="showPassword() ? 'text' : 'password'"` toggles password visibility.
+- `role="status"` and `role="alert"` make screen readers announce messages.
+
+**`login.scss` — replace the contents:**
+```scss
+.login {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  box-sizing: border-box;
+}
+
+.login-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  background: var(--surface);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+@media (max-width: 760px) {
+  .login-card { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Left: intro panel */
+.intro {
+  background: var(--navy);
+  color: var(--navy-text);
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 999px;
+  object-fit: cover;
+  object-position: 50% 30%;
+  box-shadow: 0 0 0 4px var(--amber);
+}
+
+.intro h1 {
+  margin: 8px 0 0;
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  line-height: 1.2;
+}
+
+.intro p {
+  margin: 0;
+  color: var(--navy-muted);
+  line-height: 1.6;
+}
+
+.intro strong { color: var(--navy-text); }
+
+.intro-note {
+  font-size: 0.92rem;
+  border-left: 3px solid var(--amber);
+  padding-left: 12px;
+}
+
+.signature {
+  margin-top: auto;
+  padding-top: 12px;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--amber);
+}
+
+/* Right: form */
+.form-side {
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-side h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+}
+
+.notice {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fdf3e1;
+  color: #7a4b00;
+  font-size: 0.95rem;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+
+input:focus {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+input.ng-touched.ng-invalid { border-color: var(--danger); }
+
+.password-wrap { position: relative; }
+.password-wrap input { padding-right: 64px; }
+
+.toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--link);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.toggle:hover { background: #f1f2f6; }
+
+.field-error,
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.88rem;
+}
+
+.submit {
+  justify-content: center;
+  width: 100%;
+}
+
+/* Demo accounts */
+.demo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid #eceef3;
+}
+
+.demo-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.demo-account {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.demo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.demo-role { font-weight: 600; }
+
+.demo-desc {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+```
+
+Two equal columns (navy intro, white form) that stack into one column below 760 px.
+
+### 23.8 The list: search, chips, pager and roles
+
+**`application-list.ts` — replace the contents:**
+```typescript
+import { Component, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { Subject, catchError, debounceTime, distinctUntilChanged, map, of, switchMap, tap } from 'rxjs';
+import { ApplicationService } from '../../services/application.service';
+import { ApplicationStatus, PagedApplications, STATUSES, STATUS_LABELS } from '../../models/application';
+import { StatusBadge } from '../status-badge/status-badge';
+import { AuthService } from '../../services/auth.service';
+
+@Component({
+  selector: 'app-application-list',
+  imports: [DatePipe, RouterLink, StatusBadge],
+  templateUrl: './application-list.html',
+  styleUrl: './application-list.scss'
+})
+export class ApplicationList {
+  private readonly applicationService = inject(ApplicationService);
+    protected readonly auth = inject(AuthService);
+
+  protected readonly statusLabels = STATUS_LABELS;
+  protected readonly pageSizes = [5, 10, 20];
+
+  // What the user asked for
+  protected readonly search = signal('');
+  protected readonly statusFilter = signal<ApplicationStatus | 'All'>('All');
+  protected readonly page = signal(1);
+  protected readonly pageSize = signal(5);
+
+  // What the server answered
+  protected readonly result = signal<PagedApplications | null>(null);
+  protected readonly loading = signal(true);      // first load only
+  protected readonly refreshing = signal(false);  // later loads
+  protected readonly error = signal<string | null>(null);
+
+  protected readonly counts = computed(() => this.result()?.statusCounts ?? {});
+
+  protected readonly visibleStatuses = computed(() =>
+    STATUSES.filter(status => (this.counts()[status] ?? 0) > 0 || status === this.statusFilter())
+  );
+
+  protected readonly rangeStart = computed(() => {
+    const r = this.result();
+    return !r || r.totalCount === 0 ? 0 : (r.page - 1) * r.pageSize + 1;
+  });
+
+  protected readonly rangeEnd = computed(() => {
+    const r = this.result();
+    return r ? Math.min(r.page * r.pageSize, r.totalCount) : 0;
+  });
+
+  // Delete confirmation
+  protected readonly confirmingId = signal<number | null>(null);
+  protected readonly deletingId = signal<number | null>(null);
+  protected readonly deleteError = signal<string | null>(null);
+
+  private readonly searchInput$ = new Subject<string>();
+  private readonly reload$ = new Subject<void>();
+
+  constructor() {
+    // Search box: wait for a pause in typing, ignore repeats, then reload from page 1
+    this.searchInput$.pipe(
+      map(text => text.trim()),
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntilDestroyed()
+    ).subscribe(text => {
+      this.search.set(text);
+      this.page.set(1);
+      this.reload();
+    });
+
+    // Every reload: call the API; a newer reload cancels an older one still in flight
+    this.reload$.pipe(
+      tap(() => this.refreshing.set(true)),
+      switchMap(() =>
+        this.applicationService.getPage({
+          search: this.search(),
+          status: this.statusFilter(),
+          page: this.page(),
+          pageSize: this.pageSize()
+        }).pipe(catchError(() => of(null)))
+      ),
+      takeUntilDestroyed()
+    ).subscribe(result => {
+      this.loading.set(false);
+      this.refreshing.set(false);
+
+      if (!result) {
+        this.error.set('Could not load applications. Please try again.');
+        return;
+      }
+      this.error.set(null);
+
+      // The page became empty (e.g. last row on it was deleted): step back one page
+      if (result.items.length === 0 && result.page > 1) {
+        this.page.set(result.page - 1);
+        this.reload();
+        return;
+      }
+
+      this.result.set(result);
+    });
+
+    this.reload();
+  }
+
+  private reload(): void {
+    this.reload$.next();
+  }
+
+  protected onSearch(text: string): void {
+    this.searchInput$.next(text);
+  }
+
+  protected clearSearch(input: HTMLInputElement): void {
+    input.value = '';
+    this.searchInput$.next('');
+  }
+
+  protected setFilter(filter: ApplicationStatus | 'All'): void {
+    this.statusFilter.set(filter);
+    this.page.set(1);
+    this.reload();
+  }
+
+  protected setPageSize(size: string): void {
+    this.pageSize.set(Number(size));
+    this.page.set(1);
+    this.reload();
+  }
+
+  protected goToPage(target: number): void {
+    const total = this.result()?.totalPages ?? 1;
+    if (target < 1 || target > total) return;
+    this.page.set(target);
+    this.reload();
+  }
+
+  protected askDelete(id: number): void {
+    this.deleteError.set(null);
+    this.confirmingId.set(id);
+  }
+
+  protected cancelDelete(): void {
+    this.confirmingId.set(null);
+  }
+
+  protected confirmDelete(id: number): void {
+    this.deletingId.set(id);
+
+    this.applicationService.delete(id).subscribe({
+      next: () => {
+        this.confirmingId.set(null);
+        this.deletingId.set(null);
+        this.reload();
+      },
+      error: () => {
+        this.deleteError.set('Could not delete the application. Please try again.');
+        this.deletingId.set(null);
+      }
+    });
+  }
+}
+```
+
+The list keeps two kinds of state: **what the user asked for** (search, status, page, page size) and **what the server answered** (one page plus counts). Two [RxJS](#rxjs) pipelines handle the timing:
+
+| Code | Meaning | C# / .NET equivalent |
+|---|---|---|
+| `new Subject<string>()` | A stream you push values into with `.next(value)` | An event you raise |
+| `debounceTime(300)` | Pass a value only after 300 ms without a new one — typing "engineer" sends **one** request, not eight | A timer reset on every keystroke |
+| `distinctUntilChanged()` | Skip a value equal to the previous one | — |
+| `switchMap(() => getPage(…))` | Start a request and **cancel** the previous one if it's still running, so a slow old response can never overwrite a newer one | `CancellationToken` on the old task |
+| `catchError(() => of(null))` inside `switchMap` | A failed request becomes `null` instead of ending the stream; outside, one failure would stop all future reloads | `try/catch` inside a loop |
+| `takeUntilDestroyed()` | Unsubscribes automatically when the component is destroyed, preventing memory leaks | `IDisposable` |
+| `auth = inject(AuthService)` | Lets the template hide admin-only actions | — |
+
+- The subscriptions are created in the **constructor** because `takeUntilDestroyed()` must be called there.
+- `loading` is only for the first load ("Loading…"); later loads set `refreshing`, which just dims the table.
+- After a delete the list **reloads from the server**, keeping counts, pages and totals accurate. If the current page becomes empty, it steps back one page.
+
+**`application-list.html` — replace the contents:**
+```html
+<section class="list">
+
+  @if (loading()) {
+    <p class="muted">Loading applications… the first load can take 30–60 seconds while the server wakes up.</p>
+  } @else if (error() && !result()) {
+    <p class="error">{{ error() }}</p>
+  } @else if (result(); as r) {
+
+    <div class="toolbar">
+      <div class="search">
+        <label for="search" class="sr-only">Search applications</label>
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input #searchBox id="search" type="search"
+               placeholder="Search company, position or country"
+               autocomplete="off"
+               (input)="onSearch(searchBox.value)" />
+        @if (search()) {
+          <button type="button" class="clear" (click)="clearSearch(searchBox)" aria-label="Clear search">×</button>
+        }
+      </div>
+    </div>
+
+    @if (r.allCount > 0 || statusFilter() !== 'All') {
+      <div class="pipeline">
+        <div class="bar" aria-hidden="true">
+          @for (status of visibleStatuses(); track status) {
+            <div [class]="'seg dot--' + status.toLowerCase()" [style.flex]="counts()[status] ?? 0"></div>
+          }
+        </div>
+
+        <span id="filter-hint" class="filter-hint">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"></path></svg>
+          Click a status to filter the list
+        </span>
+
+        <div class="chips" role="group" aria-labelledby="filter-hint">
+          <button type="button" class="chip" [class.chip--active]="statusFilter() === 'All'" (click)="setFilter('All')">
+            All <span class="chip-count">{{ r.allCount }}</span>
+          </button>
+          @for (status of visibleStatuses(); track status) {
+            <button type="button" class="chip" [class.chip--active]="statusFilter() === status" (click)="setFilter(status)">
+              <span [class]="'dot dot--' + status.toLowerCase()"></span>
+              {{ statusLabels[status] }}
+              <span class="chip-count">{{ counts()[status] ?? 0 }}</span>
+            </button>
+          }
+        </div>
+      </div>
+    }
+
+    @if (error()) {
+      <p class="error">{{ error() }}</p>
+    }
+    @if (deleteError()) {
+      <p class="error">{{ deleteError() }}</p>
+    }
+
+    @if (r.items.length === 0) {
+      <p class="muted empty">
+        @if (search()) {
+          No applications match "{{ search() }}".
+        } @else if (statusFilter() !== 'All') {
+          No applications with this status.
+        } @else {
+          No applications yet. Use <strong>New application</strong> to add the first one.
+        }
+      </p>
+    } @else {
+      <div class="card" [class.is-refreshing]="refreshing()">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Position</th>
+                <th>Country</th>
+                <th>Applied</th>
+                <th>Status</th>
+                <th>Updated</th>
+                @if (auth.isAdmin()) {
+                  <th><span class="sr-only">Actions</span></th>
+                }                
+              </tr>
+            </thead>
+            <tbody>
+              @for (app of r.items; track app.id) {
+                <tr>
+                  <td class="strong">{{ app.company }}</td>
+                  <td>{{ app.position }}</td>
+                  <td>{{ app.country }}</td>
+                  <td class="mono">{{ app.appliedDate | date: 'yyyy-MM-dd' }}</td>
+                  <td><app-status-badge [status]="app.status" /></td>
+                  <td class="mono">{{ app.statusDate | date: 'MM-dd HH:mm' }}</td>
+                  <td class="row-actions">
+                    @if (auth.isAdmin()) {
+                      @if (confirmingId() === app.id) {
+                        <span class="confirm-text">Delete?</span>
+                        <button type="button" class="link link--danger"
+                                (click)="confirmDelete(app.id)"
+                                [disabled]="deletingId() === app.id">
+                          {{ deletingId() === app.id ? 'Deleting…' : 'Yes' }}
+                        </button>
+                        <button type="button" class="link" (click)="cancelDelete()">No</button>
+                      } @else {
+                        <a [routerLink]="['/edit', app.id]" class="link">Edit</a>
+                        <button type="button" class="link link--danger" (click)="askDelete(app.id)">Delete</button>
+                      }
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <nav class="pager" aria-label="Pagination">
+          <span class="pager-info">
+            Showing <strong>{{ rangeStart() }}–{{ rangeEnd() }}</strong> of <strong>{{ r.totalCount }}</strong>
+          </span>
+
+          <div class="pager-controls">
+            <label for="page-size" class="pager-size">
+              Rows
+              <select #sizeSelect id="page-size" (change)="setPageSize(sizeSelect.value)">
+                @for (size of pageSizes; track size) {
+                  <option [value]="size" [selected]="size === pageSize()">{{ size }}</option>
+                }
+              </select>
+            </label>
+
+            <button type="button" class="btn btn--ghost" (click)="goToPage(r.page - 1)" [disabled]="r.page <= 1">
+              ← Previous
+            </button>
+            <span class="pager-page">Page {{ r.page }} of {{ r.totalPages }}</span>
+            <button type="button" class="btn btn--ghost" (click)="goToPage(r.page + 1)" [disabled]="r.page >= r.totalPages">
+              Next →
+            </button>
+          </div>
+        </nav>
+      </div>
+    }
+  }
+</section>
+```
+
+| Syntax | Meaning |
+|---|---|
+| `@if (result(); as r)` | If `result()` isn't null, call it `r` inside the block |
+| `#searchBox` | A [template reference variable](#template-reference-variable): a name for the input element |
+| `(input)="onSearch(searchBox.value)"` | Fires on every keystroke; the debounce decides when to search |
+| `[class.chip--active]="…"` | Adds one CSS class only when the condition is true |
+| `[style.flex]="counts()[status] ?? 0"` | Each bar segment's width is proportional to its count |
+| `role="group" aria-labelledby="filter-hint"` | Screen readers announce the chips as one group named by the hint |
+| `@if (auth.isAdmin())` around the actions header **and** cells | Read-only users don't see Edit/Delete. Wrap both together, or the columns won't line up |
+| `<nav aria-label="Pagination">` | Tells screen readers this is page navigation |
+
+**`application-list.scss` — replace the contents:**
+```scss
+.list {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  box-sizing: border-box;
+}
+
+.muted { color: var(--muted); }
+.error { color: var(--danger); margin: 0; }
+
+/* Pipeline */
+.pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bar {
+  display: flex;
+  height: 12px;
+  gap: 3px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.chips {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.chip:hover { border-color: #b9bfcc; }
+
+.chip--active {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: var(--navy-text);
+  font-weight: 600;
+}
+
+.chip-count {
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+.chip--active .chip-count { color: var(--amber); }
+
+/* Table card */
+.card {
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.table-scroll { overflow-x: auto; }
+
+table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 14px 22px;
+}
+
+th {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid #eceef3;
+}
+
+tbody tr + tr td { border-top: 1px solid #f0f1f5; }
+
+.strong { font-weight: 600; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* Row actions */
+.row-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+.row-actions > * + * { margin-left: 0.9rem; }
+
+.link {
+  color: var(--link);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-decoration: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.link:hover { text-decoration: underline; }
+.link:disabled { opacity: 0.6; cursor: default; }
+.link--danger { color: var(--danger); }
+
+.confirm-text {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.filter-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Toolbar + search */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search {
+  position: relative;
+  flex: 1 1 320px;
+  max-width: 460px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.search input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 40px 0 40px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.search input:focus {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+/* Hide the browser's own clear "×" so only ours shows */
+.search input::-webkit-search-cancel-button { display: none; }
+
+.clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.clear:hover { background: #f1f2f6; color: var(--text); }
+
+/* Empty state */
+.empty {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 28px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+/* Dim the table while a new page loads */
+.card { transition: opacity 0.15s ease; }
+.card.is-refreshing { opacity: 0.55; }
+
+/* Pager */
+.pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px 20px;
+  flex-wrap: wrap;
+  padding: 14px 22px;
+  border-top: 1px solid #eceef3;
+}
+
+.pager-info {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+.pager-info strong { color: var(--text); }
+
+.pager-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pager-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.pager-size select {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  font: inherit;
+  color: var(--text);
+}
+
+.pager-page {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--muted);
+  min-width: 96px;
+  text-align: center;
+}
+
+.pager .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+```
+
+- The search icon is `position: absolute` inside a `position: relative` wrapper; the input's left padding leaves room for it.
+- `::-webkit-search-cancel-button { display: none; }` hides the browser's own clear button so only the styled one shows.
+- `.sr-only` hides text visually while keeping it for screen readers.
+
+### 23.9 Check locally
+
+| # | Do this | Expect |
+|---|---|---|
+| 1 | Open `http://localhost:4200` | Redirected to `/login` |
+| 2 | **Use** → admin → **Sign in** | The list loads; header shows **admin · ADMIN**, **New application**, **Log out** |
+| 3 | Refresh | Still signed in |
+| 4 | Click **Next →** | The next page; "Showing 6–8 of 8" |
+| 5 | Type `engineer` slowly | One update ~0.3 s after you stop; the API terminal shows one `GET …search=engineer` |
+| 6 | Click a chip | Only that status; other chips keep their counts |
+| 7 | Log out, sign in as **demo** | No New application, no Edit/Delete |
+| 8 | As demo, open `/add` | Sent back to the list |
+| 9 | Wait 5 minutes | Sent to the login page with "Your session expired" |
+
+---
+
+## Stage 24: Deploy the new version
+
+### 24.1 Add the JWT key in Azure (required)
+
+The API refuses to start without `Jwt:Key`, and your local key lives in user secrets, which Azure can't see.
+
+1. Generate a **new** key for production (don't reuse the local one): `openssl rand -base64 48`
+2. Portal → `jobtracker-api` → **Settings** → **Environment variables** → **App settings** → **+ Add**:
+   - **Name:** `Jwt__Key`
+   - **Value:** the generated key
+3. **Apply** → **Apply** → **Confirm**.
+
+### 24.2 Commit and push the API and the UI together
+
+The endpoint's response changed and every request now needs a token, so both halves must ship in the same push:
+
+```bash
+git add -A JobTracker.Api JobTracker.Core JobTracker.Infrastructure JobTracker.Tests job-tracker-ui
+git status
+git commit -m "Add middleware, server-side search and pagination, and JWT authentication with roles"
+git push origin main
+```
+
+Check that `git status` lists the new migration files, the `Auth/` and `Middleware/` folders and the new Angular files, and **no** secrets.
+
+### 24.3 Verify
+
+1. Wait for **both** workflows to turn green.
+2. Open the live app in a new private/incognito window: it should open on the login page.
+3. Try **demo** (read-only) and **admin** (full access).
+4. In **Log stream**, the first start shows `Seeded demo user …`, then one line per request.
+
+If the API returns 500/503 right after the deploy, check **Log stream** for `Jwt:Key is missing` — the most common cause is a missing or misspelled `Jwt__Key` setting.
+
+---
+
+## Stage 25: Final verification checklist
 
 | # | Check | Expected |
 |---|---|---|
 | 1 | `dotnet build` and `dotnet test` locally | Build succeeded, all tests passed |
 | 2 | GitHub → Actions → **Build and Deploy to Azure** | Green |
 | 3 | GitHub → Actions → **Azure Static Web Apps CI/CD** | Green |
-| 4 | `https://<api-default-domain>/swagger` | Swagger UI with all six endpoints |
-| 5 | `https://<static-web-app-url>` | The list loads |
-| 6 | Add, edit, filter and delete on the live site | All work, with no console errors |
-| 7 | Refresh on `/edit/<id>` | No 404 |
-| 8 | `git status` on a clean checkout | No `bin/`, `obj/`, `node_modules/`, `.PublishSettings` or passwords committed |
-| 9 | Azure → **All resources** | Only the App Service, its plan (**F1**) and the Static Web App (**Free**) |
-| 10 | Azure → **Cost Management** → **Cost analysis** | $0.00 (data can lag 8–24 hours) |
+| 4 | `https://<api-default-domain>/swagger` | Swagger UI with the Auth and Applications endpoints and an **Authorize** button |
+| 5 | GET /api/applications in Swagger **without** a token | `401` ProblemDetails |
+| 6 | Open the live app in a private window | The login page |
+| 7 | Sign in as `demo` | List loads; no New application, Edit or Delete |
+| 8 | Sign in as `admin` | Add, edit, filter, search, paginate and delete all work |
+| 9 | Refresh on `/edit/<id>` as admin | No 404 |
+| 10 | Wait 5 minutes after signing in | Back on the login page with "Your session expired" |
+| 11 | App Service → **Log stream** | One line per request with status and duration |
+| 12 | `git status` on a clean checkout | No `bin/`, `obj/`, `node_modules/`, `.PublishSettings`, passwords or JWT keys committed |
+| 13 | Azure → **All resources** | Only the App Service, its plan (**F1**) and the Static Web App (**Free**) |
+| 14 | Azure → **Cost Management** → **Cost analysis** | $0.00 (data can lag 8–24 hours) |
 
 ---
 
@@ -2559,6 +5867,14 @@ Every problem below actually happened while building this project.
 | Live site loads but says "Could not load applications"; console shows CORS | The Static Web App's origin isn't allowed by the API | Add `Cors__AllowedOrigins__1` (Stage 18.6), with `https://` and no trailing slash |
 | Refreshing `/edit/5` on the live site returns 404 | No navigation fallback | Add `public/staticwebapp.config.json` (Stage 18.1) |
 | Static Web Apps build fails with a Node.js version error | Oryx picked an older Node than Angular 22 requires | Add `"engines": { "node": ">=22" }` to `job-tracker-ui/package.json`, or build in the workflow with `actions/setup-node` and set `skip_app_build: true` |
+| `zsh: no matches found: --include=*.ts` or `… 8.0.*` | zsh tried to expand `*` as a file pattern | Put the pattern in quotes: `--include="*.ts"`, `--version "8.0.*"` |
+| `CS0246: The type or namespace name '…Middleware' could not be found` | The file was never saved, or was saved in another folder | `find . -name "*Middleware*.cs" -not -path "*/bin/*"`, then create or move the file into `JobTracker.Api/Middleware/` |
+| `500` with `"detail": "08P01: SASL authentication failed"` | PostgreSQL rejected the password (local user secret not updated after a password change) | Copy the connection string from the App Service setting and run `dotnet user-secrets set` again |
+| `CS0535: 'ApplicationRepository' does not implement interface member 'GetPagedAsync'` in the test project | A stray copy of the repository class in `JobTracker.Tests/Repositories/ApplicationRepositoryTests.cs` | Delete that file (`git rm …`) |
+| `TS2339: Property 'portfolioUrl' does not exist` (or another environment property) | One environment file is missing the property | Give both environment files the same properties |
+| After deploying auth, the API returns 500/503 and Log stream says `Jwt:Key is missing` | No `Jwt__Key` app setting in Azure | Add it (Stage 24.1) |
+| Every API call returns 401 after deploying auth | The browser has no token yet, or it expired | Sign in again; the interceptor and guards send you to the login page automatically |
+| Header looks unstyled and **Log out** is invisible | `app.scss` was replaced with only part of its rules | Restore the complete `app.scss` from Stage 23.6 |
 
 ---
 
@@ -2570,9 +5886,12 @@ Every problem below actually happened while building this project.
 - Charges would come only from changing a tier or creating new paid resources. The budget alerts (Stage 11.2) catch that.
 
 **Security.**
-- **There is no authentication.** Anyone with the link can add, edit or delete records. Use demo data only, never your real job search. Adding login is a planned improvement.
+- **Authentication and roles:** every applications endpoint requires a JWT; only Admin can change data. Tokens expire after 5 minutes and are signed with a secret key kept in user secrets (locally) and an App Service setting (Azure), never in the repository.
+- **The demo credentials are public on purpose**, because the app holds only sample data. Anyone with the admin login can change or delete records, so never put real data in this demo.
+- Passwords are stored as salted PBKDF2 hashes, never as plain text.
 - Secrets live in exactly three places: local [user secrets](#user-secrets), Azure App Service settings, and [GitHub secrets](#github-secret). **Never** in committed files.
-- If a password is ever shared (in a chat, a screenshot or a commit), change it at the database host, then update the App Service setting and your user secret.
+- The Angular app keeps the token in [localStorage](#localstorage), a common demo choice; production systems often prefer HttpOnly cookies because of [XSS](#xss) risk.
+- If a password or key is ever shared (in a chat, a screenshot or a commit), replace it: change it at the source, then update the App Service setting and your user secret.
 - Delete downloaded `.PublishSettings` files after use.
 
 ---
@@ -2582,12 +5901,9 @@ Every problem below actually happened while building this project.
 
 Terms are in alphabetical order. Each entry explains the term in plain language and, where it helps, compares it to something familiar from C# and .NET.
 
-[.NET](#net) · [Angular](#angular) · [Angular CLI](#angular-cli) · [ASP.NET Core](#aspnet-core) · [async and await](#async-and-await) · [AutoMapper](#automapper) · [Azure](#azure) · [Azure App Service](#azure-app-service) · [Azure budget](#azure-budget) · [Azure Static Web Apps](#azure-static-web-apps) · [BEM](#bem) · [CDN](#cdn) · [CI/CD](#cicd) · [Clone](#clone) · [Commit](#commit) · [Component](#component) · [Computed signal](#computed-signal) · [Configuration](#configuration) · [Connection string](#connection-string) · [Control flow blocks](#control-flow-blocks) · [Controller](#controller) · [CORS](#cors) · [CSS and SCSS](#css-and-scss) · [DbContext](#dbcontext) · [Decorator](#decorator) · [Dependency injection](#dependency-injection) · [DTO](#dto) · [Endpoint](#endpoint) · [Entity](#entity) · [Entity Framework Core](#entity-framework-core) · [Enum](#enum) · [Environment files](#environment-files) · [Event binding](#event-binding) · [F1 Free tier](#f1-free-tier) · [Flexbox](#flexbox) · [FluentAssertions](#fluentassertions) · [Git](#git) · [.gitignore](#gitignore) · [GitHub](#github) · [GitHub Actions](#github-actions) · [GitHub secret](#github-secret) · [Hex color](#hex-color) · [HTTP methods](#http-methods) · [HTTP status codes](#http-status-codes) · [HttpClient](#httpclient) · [HTTPS](#https) · [Immutable update](#immutable-update) · [Input](#input) · [Interface](#interface) · [Interpolation](#interpolation) · [JSON](#json) · [Layered architecture](#layered-architecture) · [Lifecycle hook](#lifecycle-hook) · [localhost and port](#localhost-and-port) · [Middleware](#middleware) · [Migration](#migration) · [Model binding](#model-binding) · [Moq](#moq) · [Node.js](#nodejs) · [Npgsql](#npgsql) · [npm](#npm) · [NuGet](#nuget) · [nvm](#nvm) · [Observable](#observable) · [ORM](#orm) · [Oryx](#oryx) · [Pay-As-You-Go](#pay-as-you-go) · [PgBouncer](#pgbouncer) · [Pipe](#pipe) · [PostgreSQL](#postgresql) · [Property binding](#property-binding) · [Publish profile](#publish-profile) · [Push](#push) · [Reactive forms](#reactive-forms) · [Repository pattern](#repository-pattern) · [Resource group](#resource-group) · [Route parameter](#route-parameter) · [Routing](#routing) · [Runner](#runner) · [Service](#service) · [Signal](#signal) · [Solution](#solution) · [SPA](#spa) · [Spread operator](#spread-operator) · [SQL](#sql) · [SSL and TLS](#ssl-and-tls) · [SSR](#ssr) · [Swagger](#swagger) · [Template](#template) · [Template literal](#template-literal) · [Two-way binding](#two-way-binding) · [Type narrowing](#type-narrowing) · [TypeScript](#typescript) · [Union type](#union-type) · [Unit test](#unit-test) · [User secrets](#user-secrets) · [UTC](#utc) · [Validators](#validators) · [Visual Studio Code](#visual-studio-code) · [Vitest](#vitest) · [Workflow](#workflow) · [xUnit](#xunit) · [YAML](#yaml) · [Zoneless](#zoneless)
+[Angular](#angular) · [Angular CLI](#angular-cli) · [ASP.NET Core](#aspnet-core) · [async and await](#async-and-await) · [AutoMapper](#automapper) · [Azure](#azure) · [Azure App Service](#azure-app-service) · [Azure budget](#azure-budget) · [Azure Static Web Apps](#azure-static-web-apps) · [BEM](#bem) · [CDN](#cdn) · [CI/CD](#cicd) · [Claims](#claims) · [Clone](#clone) · [Commit](#commit) · [Component](#component) · [Computed signal](#computed-signal) · [Configuration](#configuration) · [Connection string](#connection-string) · [Control flow blocks](#control-flow-blocks) · [Controller](#controller) · [CORS](#cors) · [CSS and SCSS](#css-and-scss) · [CSS variables](#css-variables) · [DbContext](#dbcontext) · [Decorator](#decorator) · [Dependency injection](#dependency-injection) · [DTO](#dto) · [Endpoint](#endpoint) · [Entity](#entity) · [Entity Framework Core](#entity-framework-core) · [Enum](#enum) · [Environment files](#environment-files) · [Event binding](#event-binding) · [F1 Free tier](#f1-free-tier) · [Flexbox](#flexbox) · [FluentAssertions](#fluentassertions) · [Git](#git) · [GitHub](#github) · [GitHub Actions](#github-actions) · [GitHub secret](#github-secret) · [.gitignore](#gitignore) · [Google Fonts](#google-fonts) · [Hex color](#hex-color) · [HTTP methods](#http-methods) · [HTTP status codes](#http-status-codes) · [HttpClient](#httpclient) · [HttpParams](#httpparams) · [HTTPS](#https) · [ILIKE](#ilike) · [Immutable update](#immutable-update) · [Input](#input) · [Interceptor](#interceptor) · [Interface](#interface) · [Interpolation](#interpolation) · [IQueryable](#iqueryable) · [JSON](#json) · [JWT](#jwt) · [Layered architecture](#layered-architecture) · [Lifecycle hook](#lifecycle-hook) · [localhost and port](#localhost-and-port) · [localStorage](#localstorage) · [Middleware](#middleware) · [Migration](#migration) · [Model binding](#model-binding) · [Moq](#moq) · [.NET](#net) · [Node.js](#nodejs) · [Npgsql](#npgsql) · [npm](#npm) · [NuGet](#nuget) · [nvm](#nvm) · [Observable](#observable) · [ORM](#orm) · [Oryx](#oryx) · [Pagination](#pagination) · [Password hashing](#password-hashing) · [Pay-As-You-Go](#pay-as-you-go) · [PgBouncer](#pgbouncer) · [Pipe](#pipe) · [PostgreSQL](#postgresql) · [ProblemDetails](#problemdetails) · [Property binding](#property-binding) · [Publish profile](#publish-profile) · [Push](#push) · [Reactive forms](#reactive-forms) · [Record](#record) · [Reflection](#reflection) · [Repository pattern](#repository-pattern) · [Resource group](#resource-group) · [Route guard](#route-guard) · [Route parameter](#route-parameter) · [Routing](#routing) · [Runner](#runner) · [RxJS](#rxjs) · [Service](#service) · [Signal](#signal) · [Solution](#solution) · [SPA](#spa) · [Spread operator](#spread-operator) · [SQL](#sql) · [SSL and TLS](#ssl-and-tls) · [SSR](#ssr) · [Structured logging](#structured-logging) · [Swagger](#swagger) · [Switch expression](#switch-expression) · [Template](#template) · [Template literal](#template-literal) · [Template reference variable](#template-reference-variable) · [Two-way binding](#two-way-binding) · [Type narrowing](#type-narrowing) · [TypeScript](#typescript) · [Union type](#union-type) · [Unit test](#unit-test) · [User secrets](#user-secrets) · [UTC](#utc) · [Validators](#validators) · [Visual Studio Code](#visual-studio-code) · [Vitest](#vitest) · [Workflow](#workflow) · [XSS](#xss) · [xUnit](#xunit) · [YAML](#yaml) · [Zoneless](#zoneless)
 
 ---
-
-### .NET
-Microsoft's free, cross-platform platform for building applications in C#. The **.NET SDK** (Software Development Kit) is what you install to write code: the compiler plus the `dotnet` command (`dotnet new`, `dotnet build`, `dotnet test`, `dotnet run`, `dotnet publish`). The **runtime** is what runs the compiled app; Azure App Service provides it. This project uses .NET 8, a **Long-Term Support (LTS)** release that receives security fixes for three years.
 
 ### Angular
 A front-end framework from Google for building web applications in TypeScript. An Angular app is made of [components](#component), [services](#service) and [routes](#routing). It runs entirely in the browser.
@@ -2625,6 +5941,9 @@ An Azure service for hosting static front-end files (HTML, JavaScript, CSS) such
 ### CI/CD
 **Continuous Integration / Continuous Deployment**. CI automatically builds and tests the code on every change. CD automatically deploys it when the tests pass. Here, both are done by [GitHub Actions](#github-actions).
 
+### Claims
+Facts about a user carried inside a [JWT](#jwt), such as their id (`sub`), username (`ClaimTypes.Name`) and role (`ClaimTypes.Role`). ASP.NET Core reads them on every request; `[Authorize(Roles = "Admin")]` checks the role claim.
+
 ### Clone
 Copying a [Git](#git) repository from GitHub to your computer with `git clone <url>`. The copy stays linked to GitHub, so you can [push](#push) changes back.
 
@@ -2654,6 +5973,9 @@ In ASP.NET Core, a class (here inheriting `ControllerBase`) whose methods handle
 
 ### CSS and SCSS
 **CSS** (Cascading Style Sheets) is the language for styling web pages: colors, sizes, spacing and layout. **SCSS** (Sassy CSS) is CSS with extras such as variables and nesting. It's compiled to plain CSS during the build.
+
+### CSS variables
+Named values defined once, usually on `:root`, and reused with `var(--name)`, for example `--navy: #1c2b4d;` then `background: var(--navy);`. Officially called "custom properties". They keep a whole design consistent and make color changes one-line edits.
 
 ### DbContext
 The EF Core class representing a session with the database. Each `DbSet<T>` property is a table. You query through it and save changes with `SaveChangesAsync()`.
@@ -2697,9 +6019,6 @@ A .NET testing library that makes assertions read like sentences: `result.Should
 ### Git
 A version control system that records every change to your code as [commits](#commit), lets you go back to any earlier version, and syncs with remote copies such as [GitHub](#github).
 
-### .gitignore
-A file listing paths [Git](#git) must ignore: build output (`bin/`, `obj/`, `dist/`), downloaded libraries (`node_modules/`), editor settings and local secrets. `dotnet new gitignore` creates a standard one for .NET.
-
 ### GitHub
 A website that hosts Git repositories, with collaboration features (pull requests, issues) and automation ([GitHub Actions](#github-actions)).
 
@@ -2708,6 +6027,12 @@ GitHub's automation service. [Workflow](#workflow) files in `.github/workflows/`
 
 ### GitHub secret
 An encrypted value stored in a repository's settings (**Settings → Secrets and variables → Actions**). Workflows reference it as `${{ secrets.NAME }}`. Nobody can read it back after saving, which makes it the right place for deployment credentials.
+
+### .gitignore
+A file listing paths [Git](#git) must ignore: build output (`bin/`, `obj/`, `dist/`), downloaded libraries (`node_modules/`), editor settings and local secrets. `dotnet new gitignore` creates a standard one for .NET.
+
+### Google Fonts
+A free library of web fonts. A `<link>` tag in `index.html` loads them, then CSS uses them by name, always with a fallback (`'Sora', system-ui, sans-serif`) in case the font doesn't load.
 
 ### Hex color
 A color written as `#RRGGBB`: the amounts of red, green and blue, each from `00` to `ff` in base 16. For example, `#b42318` is a dark red.
@@ -2721,8 +6046,14 @@ Three-digit numbers in every HTTP response. **200** OK, **201** Created, **204**
 ### HttpClient
 The class for making HTTP requests. In Angular it's registered with `provideHttpClient()` and its methods (`get`, `post`, `put`, `patch`, `delete`) return [Observables](#observable). .NET has a class with the same name and purpose.
 
+### HttpParams
+Angular's immutable builder for URL query strings: `new HttpParams().set('page', 1).set('search', 'engineer')` produces `?page=1&search=engineer`, with URL-encoding handled automatically. Each `.set()` returns a new object.
+
 ### HTTPS
 HTTP encrypted with [TLS](#ssl-and-tls), so nobody between the browser and the server can read or change the data. Both Azure services in this project provide HTTPS automatically.
+
+### ILIKE
+PostgreSQL's case-insensitive version of SQL `LIKE`. `ILIKE '%engineer%'` matches "Engineer", "ENGINEER" and "Software engineer". `%` means "any characters". In EF Core with Npgsql it's written `EF.Functions.ILike(column, pattern)`.
 
 ### Immutable update
 Changing data by creating a new object or array instead of modifying the existing one, for example `apps.filter(...)`, which returns a new array. [Signals](#signal) detect changes by comparing values, so an in-place change to the same array wouldn't be noticed.
@@ -2730,14 +6061,23 @@ Changing data by creating a new object or array instead of modifying the existin
 ### Input
 A property of an Angular component that its parent sets, declared with `input()` or `input.required()`. The parent passes it with [property binding](#property-binding): `<app-status-badge [status]="app.status" />`. With `withComponentInputBinding()`, the router can also fill inputs from URL [route parameters](#route-parameter). Inputs are [signals](#signal).
 
+### Interceptor
+In Angular, a function every [HttpClient](#httpclient) request and response passes through — the client-side equivalent of [middleware](#middleware). This project's interceptor adds the `Authorization: Bearer <token>` header and logs the user out when the API answers 401.
+
 ### Interface
 A contract listing members without implementing them. In C#, `IApplicationRepository` lists the data operations, and classes implement it. In TypeScript, an `interface` describes the shape of an object and exists only at compile time.
 
 ### Interpolation
 Inserting a value into text. In Angular templates it's written `{{ value }}`. In C# it's `$"{value}"`, and in TypeScript it's a [template literal](#template-literal).
 
+### IQueryable
+A .NET interface for a query that hasn't run yet. Each `.Where(…)`, `.OrderBy(…)`, `.Skip(…)` adds to it, and EF Core translates the whole chain into one SQL statement when you finally call something like `ToListAsync()` or `CountAsync()`. Filtering an `IQueryable` happens in the database; filtering a `List` happens in memory.
+
 ### JSON
 **JavaScript Object Notation**, the text format APIs use to exchange data, for example `{"company": "Contoso", "id": 1}`. ASP.NET Core writes property names in camelCase.
+
+### JWT
+**JSON Web Token**: a compact, signed token in three dot-separated parts, `header.payload.signature`. The payload holds [claims](#claims) and an expiry time; the signature, made with a secret key, proves the token was issued by the API and hasn't been changed. The payload is only encoded, not encrypted, so anyone can read it — never put secrets inside. Tokens are sent in the `Authorization: Bearer <token>` header.
 
 ### Layered architecture
 Organizing code into layers with one-way dependencies. Here: **Core** (business types, no dependencies) ← **Infrastructure** (database access) ← **Api** (HTTP). Inner layers never depend on outer ones, so the database or web framework can change without touching the business types.
@@ -2747,6 +6087,9 @@ A method Angular calls automatically at a specific moment in a component's life.
 
 ### localhost and port
 `localhost` means "this computer". A **port** is a numbered door a server listens on, so `http://localhost:4200` is the Angular development server on your own machine, port 4200.
+
+### localStorage
+Browser storage that keeps small text values per site, even after the page is closed. Readable by any script on that site, so a token stored there could be stolen through [XSS](#xss); HttpOnly cookies are the more secure alternative for production.
 
 ### Middleware
 In ASP.NET Core, the components every request passes through, in order, configured with `app.Use...` in `Program.cs`: HTTPS redirection, CORS, authorization, routing to controllers. Order matters.
@@ -2759,6 +6102,9 @@ ASP.NET Core automatically filling controller method parameters from the request
 
 ### Moq
 A .NET library for creating fake objects (**mocks**) in tests. `new Mock<IApplicationRepository>()` creates a fake repository whose results you control with `.Setup(...).ReturnsAsync(...)`, so tests don't need a real database.
+
+### .NET
+Microsoft's free, cross-platform platform for building applications in C#. The **.NET SDK** (Software Development Kit) is what you install to write code: the compiler plus the `dotnet` command (`dotnet new`, `dotnet build`, `dotnet test`, `dotnet run`, `dotnet publish`). The **runtime** is what runs the compiled app; Azure App Service provides it. This project uses .NET 8, a **Long-Term Support (LTS)** release that receives security fixes for three years.
 
 ### Node.js
 A program that runs JavaScript outside the browser. Angular's build tools are JavaScript programs, so they need Node.js installed.
@@ -2784,6 +6130,12 @@ From the **RxJS** library (Reactive Extensions for JavaScript), included with An
 ### Oryx
 Microsoft's automatic build system, used by Azure Static Web Apps (and App Service) to detect a project's type and build it, for example running `npm install` and `npm run build` for Angular.
 
+### Pagination
+Returning a large result in pages. The client sends the page number and page size; the server skips the earlier rows and returns one page, plus the total count so the client can show "Page 2 of 4". In EF Core: `.Skip((page - 1) * pageSize).Take(pageSize)`, which becomes SQL `OFFSET … LIMIT …`. A stable sort order (with a unique tiebreaker such as `Id`) is required, or rows can repeat or go missing between pages.
+
+### Password hashing
+Storing a one-way scramble of a password instead of the password itself. At login, the submitted password is hashed the same way and compared. ASP.NET Core's `PasswordHasher` uses **PBKDF2**: a random **salt** per password (so identical passwords produce different hashes) and many iterations (so guessing is slow). If the database ever leaked, the passwords wouldn't.
+
 ### Pay-As-You-Go
 An Azure billing plan where you pay monthly only for what you use beyond free amounts. You must upgrade to it to keep using Azure after the free trial's 30 days. Resources on free tiers still cost $0.
 
@@ -2795,6 +6147,9 @@ In Angular templates, a function that formats a value for display, written with 
 
 ### PostgreSQL
 A free, open-source relational database, often called **Postgres**. This project stores its data in it.
+
+### ProblemDetails
+The standard JSON format for HTTP API errors (RFC 9457): `{ "type", "title", "status", "detail", "instance" }`, with content type `application/problem+json`. Clients and tools understand it, so every error from the API has the same shape.
 
 ### Property binding
 Angular template syntax with square brackets, `[property]="expression"`, that sets an element's property or a component's input from a value in the class. Data flows from the class to the screen.
@@ -2808,11 +6163,20 @@ Sending your local [commits](#commit) to GitHub with `git push origin main`. In 
 ### Reactive forms
 Angular's approach where the form is defined in TypeScript (fields, default values, [validators](#validators)) with `FormBuilder`, then connected to the HTML with `[formGroup]` and `formControlName`. Similar to a C# view model with validation attributes.
 
+### Record
+A C# type designed to carry data: `public record ApplicationPage(IReadOnlyList<Application> Items, int TotalCount, …);` declares the properties and the constructor in one line. Records are immutable by default and compare by value.
+
+### Reflection
+.NET's ability to inspect types, methods and attributes while the program runs, for example `typeof(ApplicationsController).GetMethod("Delete").GetCustomAttribute<AuthorizeAttribute>()`. The security tests use it to check that the `[Authorize]` locks are in place.
+
 ### Repository pattern
 Putting all data access behind an [interface](#interface) (`IApplicationRepository`) with methods like `GetAllAsync`, `CreateAsync` and `DeleteAsync`. Controllers use the interface and never touch the database directly, which makes them easy to test with [mocks](#moq).
 
 ### Resource group
 An Azure folder that holds related resources. Deleting the group deletes everything inside it.
+
+### Route guard
+In Angular, a function that runs before a route opens and returns `true` (let the user in) or a `UrlTree` (redirect). This project's guards keep the list behind login and Add/Edit for admins. Guards only improve the user experience; the API's `[Authorize]` attributes are the real protection.
 
 ### Route parameter
 A placeholder in a URL pattern that captures part of the address: `{id}` in `[HttpGet("{id}")]` on the API, and `:id` in Angular's `'edit/:id'` route.
@@ -2822,6 +6186,9 @@ Matching a URL to the code that handles it. In ASP.NET Core, attributes on contr
 
 ### Runner
 The temporary computer GitHub Actions uses to run a workflow job, chosen with `runs-on:` (for example `ubuntu-latest`). It starts empty each time, which is why workflows begin by checking out the code and installing tools.
+
+### RxJS
+**Reactive Extensions for JavaScript**, the library behind Angular's [Observables](#observable). Its operators transform streams of values over time: `debounceTime` (wait for a pause), `distinctUntilChanged` (skip repeats), `switchMap` (start a new request and cancel the previous one), `catchError` (handle failures), `tap` (side effects). A `Subject` is a stream you push values into yourself.
 
 ### Service
 In Angular, a class marked `@Injectable` that holds logic or data shared by several components, such as `ApplicationService`, which makes every API call. Components get it through [dependency injection](#dependency-injection).
@@ -2847,14 +6214,23 @@ TypeScript/JavaScript `...`, which copies all properties of an object into a new
 ### SSR
 **Server-Side Rendering**: generating a page's HTML on a server before sending it, mainly to help search engines. Not used in this project.
 
+### Structured logging
+Logging with named placeholders, `_logger.LogInformation("HTTP {Method} {Path} responded {StatusCode}", …)`, so each value is stored as a separate field rather than baked into text. Log tools can then filter and aggregate by field (for example every request with `StatusCode` 500). Avoid `$"…"` interpolation in log messages.
+
 ### Swagger
 A tool that generates interactive documentation for an API from its code. You can read every endpoint and send test requests at `/swagger`. It's based on the **OpenAPI** specification. In .NET it's provided by the Swashbuckle package.
+
+### Switch expression
+A compact C# form of `switch` that returns a value: `var code = ex switch { KeyNotFoundException => 404, ArgumentException => 400, _ => 500 };`. `_` is the default case.
 
 ### Template
 The HTML part of an Angular component, which may use Angular syntax: [interpolation](#interpolation), [bindings](#property-binding), [control flow blocks](#control-flow-blocks) and [pipes](#pipe).
 
 ### Template literal
 A TypeScript/JavaScript string written with backticks that can embed values with `${...}`, for example `` `${baseUrl}/${id}` ``. Equivalent to C# `$"{baseUrl}/{id}"`.
+
+### Template reference variable
+In an Angular template, `#name` on an element gives it a name the template can use, for example `<input #searchBox (input)="onSearch(searchBox.value)">`.
 
 ### Two-way binding
 Angular's `[(ngModel)]="signal"` syntax, nicknamed "banana in a box". It keeps a form control and a value in sync in both directions: the control shows the value, and user changes update the value. It requires `FormsModule`.
@@ -2888,6 +6264,9 @@ The test runner used by new Angular 22 projects for `*.spec.ts` files (run with 
 
 ### Workflow
 A [YAML](#yaml) file in `.github/workflows/` defining an automated process: **when** it runs (`on:`), **where** (`runs-on:`), and **what** it does (`steps:`). This project has two: one for the API, one for the Angular app.
+
+### XSS
+**Cross-Site Scripting**: an attack where malicious script gets into a page (for example through unescaped user input) and runs with the page's permissions, able to read anything scripts can read, including [localStorage](#localstorage). Angular escapes interpolated values by default, which prevents most XSS.
 
 ### xUnit
 A .NET testing framework. Methods marked `[Fact]` are tests, discovered and run by `dotnet test`.

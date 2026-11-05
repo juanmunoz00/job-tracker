@@ -1,5 +1,5 @@
 export const environment = {
-  production: true,   // false in environment.development.ts
+  production: false,
   apiUrl: 'http://localhost:5296/api',
   swaggerUrl: 'https://jobtracker-api-b5efh7c9g8crfwbh.westus3-01.azurewebsites.net/swagger',
   portfolioUrl: 'https://juanmunoz.dev',
